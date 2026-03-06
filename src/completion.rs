@@ -53,10 +53,10 @@ pub fn check_terminal_promise(output: &str, promise: &str) -> bool {
     };
 
     let escaped_promise = escape_regex(promise);
-    let pattern = format!(r"^<promise>\s*{}\s*</promise>$", escaped_promise);
-    
+    let pattern = format!(r"(?i)^<promise>\s*{}\s*</promise>$", escaped_promise);
+
     match Regex::new(&pattern) {
-        Ok(re) => re.is_match(&last_line.to_lowercase()),
+        Ok(re) => re.is_match(&last_line),
         Err(_) => false,
     }
 }

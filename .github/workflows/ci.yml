@@ -13,11 +13,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
+    - uses: actions/checkout@v4
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
     - name: Build
       run: cargo build --verbose
     - name: Run tests
@@ -30,20 +28,29 @@ jobs:
   build-release:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: ralph
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: ralph.exe
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: ralph
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions-rs/toolchain@v1
+    - uses: actions/checkout@v4
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: stable
-        override: true
+        targets: ${{ matrix.target }}
     - name: Build release
-      run: cargo build --release --verbose
+      run: cargo build --release --target ${{ matrix.target }} --verbose
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ralph-${{ matrix.os }}
-        path: |
-          target/release/ralph
-          target/release/ralph.exe
+        path: target/${{ matrix.target }}/release/${{ matrix.artifact }}
+        if-no-files-found: error
