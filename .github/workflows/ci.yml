@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
+    - name: Check formatting
+      run: cargo fmt -- --check
+    - name: Run clippy
+      run: cargo clippy -- -D warnings
+
+  build-release:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+    - name: Build release
+      run: cargo build --release --verbose
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: ralph-${{ matrix.os }}
+        path: |
+          target/release/ralph
+          target/release/ralph.exe

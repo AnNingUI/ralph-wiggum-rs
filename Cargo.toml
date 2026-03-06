@@ -1,0 +1,33 @@
+[package]
+name = "ralph-wiggum-rs"
+version = "1.2.2"
+edition = "2024"
+authors = ["AnNingUI"]
+license = "MIT"
+description = "Ralph Wiggum technique for iterative AI development loops with multi-agent support"
+repository = "https://github.com/AnNingUI/ralph-wiggum-rs"
+keywords = ["ai", "ralph-wiggum", "iterative-development", "automation", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "ralph-rs"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive", "cargo"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.40", features = ["full"] }
+anyhow = "1.0"
+regex = "1.11"
+chrono = { version = "0.4", features = ["serde"] }
+colored = "2.1"
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
