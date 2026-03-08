@@ -110,6 +110,14 @@ pub fn get_questions_path() -> PathBuf {
     get_state_dir().join("ralph-questions.json")
 }
 
+pub fn get_prev_ai_path() -> PathBuf {
+    get_state_dir().join("ralph-prev-ai.md")
+}
+
+pub fn get_last_message_capture_path() -> PathBuf {
+    get_state_dir().join("ralph-last-message.txt")
+}
+
 pub fn ensure_state_dir() -> Result<()> {
     let state_dir = get_state_dir();
     if !state_dir.exists() {
@@ -183,6 +191,38 @@ pub fn save_tasks(tasks: &str) -> Result<()> {
 
 pub fn load_tasks() -> Result<Option<String>> {
     let path = get_tasks_path();
+    if !path.exists() {
+        return Ok(None);
+    }
+    let content = fs::read_to_string(path)?;
+    Ok(Some(content))
+}
+
+pub fn save_prev_ai_response(response: &str) -> Result<()> {
+    ensure_state_dir()?;
+    fs::write(get_prev_ai_path(), response)?;
+    Ok(())
+}
+
+pub fn load_prev_ai_response() -> Result<Option<String>> {
+    let path = get_prev_ai_path();
+    if !path.exists() {
+        return Ok(None);
+    }
+    let content = fs::read_to_string(path)?;
+    Ok(Some(content))
+}
+
+pub fn clear_last_message_capture() -> Result<()> {
+    let path = get_last_message_capture_path();
+    if path.exists() {
+        fs::remove_file(path)?;
+    }
+    Ok(())
+}
+
+pub fn load_last_message_capture() -> Result<Option<String>> {
+    let path = get_last_message_capture_path();
     if !path.exists() {
         return Ok(None);
     }

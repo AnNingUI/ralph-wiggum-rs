@@ -31,8 +31,14 @@ sudo mv ./target/release/ralph-rs /usr/local/bin/ralph-rs
 # Basic usage with opencode (recommended)
 ralph-rs "Your task" --agent opencode --model claude-sonnet-4 -n 10
 
-# Using codex (reads from ~/.codex/config.toml)
+# Using codex (ralph-rs defaults to writable workspace mode and Codex's own configured model)
 ralph-rs "Your task" --agent codex -n 10
+
+# Override Codex sandbox behavior if needed
+ralph-rs "Your task" --agent codex --codex-sandbox workspace-write
+
+# Force a specific Codex model only when you really want to override Codex's config
+ralph-rs "Your task" --agent codex --model gpt-5.4 -n 10 --codex-sandbox workspace-write
 
 # Check status
 ralph-rs status
@@ -46,6 +52,12 @@ ralph-rs stop
 ### Codex Configuration
 
 If you're using codex with a third-party API provider, ralph-rs might not be able to read your API key from `auth.json` due to permission issues.
+
+`ralph-rs` passes `--sandbox`, `--add-dir`, `--output-last-message`, and `--json` through to `codex exec`. It only passes `--model` when you explicitly set one, so the default `--agent codex` flow now uses Codex's own configured/default model instead of forcing `claude-sonnet-4`.
+
+`ralph-rs` does not currently send an approval flag to `codex exec`, because current Codex builds reject the old `--ask-for-approval` argument.
+
+`ralph-rs` also prepends a Codex-only instruction telling the model to use the built-in `apply_patch` tool directly instead of trying to run `apply_patch` through shell commands.
 
 **Solution:** Use environment variables instead.
 

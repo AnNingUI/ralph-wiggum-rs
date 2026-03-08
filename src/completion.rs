@@ -107,7 +107,7 @@ mod tests {
     fn test_check_terminal_promise() {
         let output = "Some output\n<promise>DONE</promise>";
         assert!(check_terminal_promise(output, "DONE"));
-        
+
         let output2 = "Some output\nNot done";
         assert!(!check_terminal_promise(output2, "DONE"));
     }
@@ -116,10 +116,10 @@ mod tests {
     fn test_tasks_markdown_all_complete() {
         let complete = "- [x] Task 1\n- [x] Task 2";
         assert!(tasks_markdown_all_complete(complete));
-        
+
         let incomplete = "- [x] Task 1\n- [ ] Task 2";
         assert!(!tasks_markdown_all_complete(incomplete));
-        
+
         let no_tasks = "No tasks here";
         assert!(!tasks_markdown_all_complete(no_tasks));
     }

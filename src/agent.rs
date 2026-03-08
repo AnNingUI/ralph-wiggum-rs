@@ -1,9 +1,10 @@
 //! Agent configuration and management
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
@@ -18,7 +19,8 @@ fn get_opencode_pattern() -> &'static Regex {
 }
 
 fn get_claude_pattern1() -> &'static Regex {
-    CLAUDE_PATTERN1.get_or_init(|| Regex::new(r"(?:Using|Called|Tool:)\s+([A-Za-z0-9_.-]+)").unwrap())
+    CLAUDE_PATTERN1
+        .get_or_init(|| Regex::new(r"(?:Using|Called|Tool:)\s+([A-Za-z0-9_.-]+)").unwrap())
 }
 
 fn get_claude_pattern2() -> &'static Regex {
@@ -53,6 +55,71 @@ impl AgentType {
             AgentType::Copilot => "copilot",
         }
     }
+
+    pub fn default_model(&self) -> Option<&'static str> {
+        match self {
+            AgentType::Opencode | AgentType::ClaudeCode => Some("claude-sonnet-4"),
+            AgentType::Codex | AgentType::Copilot => None,
+        }
+    }
+
+    pub fn implicit_model_label(&self) -> &'static str {
+        match self {
+            AgentType::Opencode | AgentType::ClaudeCode => "default",
+            AgentType::Codex => "codex-config-default",
+            AgentType::Copilot => "copilot-default",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum SandboxMode {
+    ReadOnly,
+    WorkspaceWrite,
+    DangerFullAccess,
+}
+
+impl SandboxMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SandboxMode::ReadOnly => "read-only",
+            SandboxMode::WorkspaceWrite => "workspace-write",
+            SandboxMode::DangerFullAccess => "danger-full-access",
+        }
+    }
+}
+
+impl fmt::Display for SandboxMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum ApprovalPolicy {
+    Untrusted,
+    OnFailure,
+    OnRequest,
+    Never,
+}
+
+impl ApprovalPolicy {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ApprovalPolicy::Untrusted => "untrusted",
+            ApprovalPolicy::OnFailure => "on-failure",
+            ApprovalPolicy::OnRequest => "on-request",
+            ApprovalPolicy::Never => "never",
+        }
+    }
+}
+
+impl fmt::Display for ApprovalPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -66,13 +133,18 @@ pub struct AgentBuildArgsOptions {
     pub allow_all_permissions: bool,
     pub extra_flags: Vec<String>,
     pub stream_output: bool,
+    pub sandbox_mode: Option<SandboxMode>,
+    pub approval_policy: Option<ApprovalPolicy>,
+    pub extra_writable_dirs: Vec<PathBuf>,
+    pub output_last_message_path: Option<PathBuf>,
 }
 
 pub trait AgentConfig {
     fn agent_type(&self) -> AgentType;
     fn command(&self) -> &str;
     fn config_name(&self) -> &str;
-    fn build_args(&self, prompt: &str, model: &str, options: &AgentBuildArgsOptions) -> Vec<String>;
+    fn build_args(&self, prompt: &str, model: &str, options: &AgentBuildArgsOptions)
+    -> Vec<String>;
     fn build_env(&self, options: &AgentEnvOptions) -> HashMap<String, String>;
     fn parse_tool_output(&self, line: &str) -> Option<String>;
 }
@@ -97,8 +169,15 @@ impl AgentConfig for DefaultAgentConfig {
         &self.config_name
     }
 
-    fn build_args(&self, prompt: &str, model: &str, options: &AgentBuildArgsOptions) -> Vec<String> {
-        let mut args = Vec::with_capacity(5 + options.extra_flags.len());
+    fn build_args(
+        &self,
+        prompt: &str,
+        model: &str,
+        options: &AgentBuildArgsOptions,
+    ) -> Vec<String> {
+        let mut args = Vec::with_capacity(
+            11 + options.extra_flags.len() + options.extra_writable_dirs.len() * 2,
+        );
 
         match self.agent_type {
             AgentType::Opencode => {
@@ -115,11 +194,34 @@ impl AgentConfig for DefaultAgentConfig {
                 args.push(model.to_string());
             }
             AgentType::Codex => {
-                // Codex 需要 exec 子命令用于非交互式执行
+                let _ = options.approval_policy;
+
                 args.push("exec".to_string());
-                args.push(prompt.to_string());
-                // Codex 会自动从 ~/.codex/auth.json 读取配置
-                // 不指定 --model 让它使用默认配置
+
+                if let Some(sandbox_mode) = options.sandbox_mode {
+                    args.push("--sandbox".to_string());
+                    args.push(sandbox_mode.to_string());
+                }
+
+                if !model.trim().is_empty() {
+                    args.push("--model".to_string());
+                    args.push(model.to_string());
+                }
+
+                for dir in &options.extra_writable_dirs {
+                    args.push("--add-dir".to_string());
+                    args.push(dir.display().to_string());
+                }
+
+                if let Some(output_last_message_path) = &options.output_last_message_path {
+                    args.push("--output-last-message".to_string());
+                    args.push(output_last_message_path.display().to_string());
+                }
+
+                args.push("--json".to_string());
+
+                let _ = prompt;
+                args.push("-".to_string());
             }
             AgentType::Copilot => {
                 args.push(prompt.to_string());
@@ -132,11 +234,11 @@ impl AgentConfig for DefaultAgentConfig {
 
     fn build_env(&self, options: &AgentEnvOptions) -> HashMap<String, String> {
         let mut env = HashMap::new();
-        
+
         if options.filter_plugins {
             env.insert("FILTER_PLUGINS".to_string(), "true".to_string());
         }
-        
+
         if options.allow_all_permissions {
             env.insert("ALLOW_ALL_PERMISSIONS".to_string(), "true".to_string());
         }
@@ -156,13 +258,13 @@ impl AgentConfig for DefaultAgentConfig {
             AgentType::ClaudeCode => {
                 let clean_line = strip_ansi(line);
 
-                // Try pattern: "Using|Called|Tool: <name>"
                 if let Some(cap) = get_claude_pattern1().captures(&clean_line) {
                     return cap.get(1).map(|m| m.as_str().to_string());
                 }
 
-                // Try JSON pattern: "type": "tool_use"
-                if clean_line.contains(r#""type":"tool_use"#) || clean_line.contains(r#""type": "tool_use"#) {
+                if clean_line.contains(r#""type":"tool_use"#)
+                    || clean_line.contains(r#""type": "tool_use"#)
+                {
                     if let Some(cap) = get_claude_pattern2().captures(&clean_line) {
                         return cap.get(1).map(|m| m.as_str().to_string());
                     }
@@ -208,27 +310,43 @@ pub fn create_default_agent(agent_type: AgentType) -> Box<dyn AgentConfig> {
     let (command, config_name) = match agent_type {
         AgentType::Opencode => {
             #[cfg(target_os = "windows")]
-            { ("opencode.cmd", "opencode") }
+            {
+                ("opencode.cmd", "opencode")
+            }
             #[cfg(not(target_os = "windows"))]
-            { ("opencode", "opencode") }
+            {
+                ("opencode", "opencode")
+            }
         }
         AgentType::ClaudeCode => {
             #[cfg(target_os = "windows")]
-            { ("claude-code.cmd", "claude-code") }
+            {
+                ("claude-code.cmd", "claude-code")
+            }
             #[cfg(not(target_os = "windows"))]
-            { ("claude-code", "claude-code") }
+            {
+                ("claude-code", "claude-code")
+            }
         }
         AgentType::Codex => {
             #[cfg(target_os = "windows")]
-            { ("codex.cmd", "codex") }
+            {
+                ("codex.cmd", "codex")
+            }
             #[cfg(not(target_os = "windows"))]
-            { ("codex", "codex") }
+            {
+                ("codex", "codex")
+            }
         }
         AgentType::Copilot => {
             #[cfg(target_os = "windows")]
-            { ("copilot.cmd", "copilot") }
+            {
+                ("copilot.cmd", "copilot")
+            }
             #[cfg(not(target_os = "windows"))]
-            { ("copilot", "copilot") }
+            {
+                ("copilot", "copilot")
+            }
         }
     };
 
