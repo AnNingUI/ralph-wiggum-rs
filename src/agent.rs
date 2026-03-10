@@ -131,6 +131,8 @@ pub struct AgentEnvOptions {
 #[derive(Debug, Clone)]
 pub struct AgentBuildArgsOptions {
     pub allow_all_permissions: bool,
+    pub codex_resume_last: bool,
+    pub codex_resume_session: Option<String>,
     pub extra_flags: Vec<String>,
     pub stream_output: bool,
     pub sandbox_mode: Option<SandboxMode>,
@@ -219,6 +221,15 @@ impl AgentConfig for DefaultAgentConfig {
                 }
 
                 args.push("--json".to_string());
+                if options.codex_resume_last || options.codex_resume_session.is_some() {
+                    args.push("resume".to_string());
+                    if options.codex_resume_last {
+                        args.push("--last".to_string());
+                    }
+                    if let Some(session) = &options.codex_resume_session {
+                        args.push(session.clone());
+                    }
+                }
 
                 let _ = prompt;
                 args.push("-".to_string());

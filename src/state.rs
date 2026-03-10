@@ -19,6 +19,10 @@ pub struct RalphState {
     pub iteration: u32,
     pub max_iterations: u32,
     pub started_at: DateTime<Utc>,
+    #[serde(default)]
+    pub one_session: bool,
+    #[serde(default)]
+    pub codex_resume_session: Option<String>,
     pub rotation: Option<Vec<AgentModelPair>>,
     pub rotation_index: Option<usize>,
     pub promise: Option<String>,
@@ -33,6 +37,8 @@ impl RalphState {
             iteration: 1,
             max_iterations,
             started_at: Utc::now(),
+            one_session: false,
+            codex_resume_session: None,
             rotation: None,
             rotation_index: None,
             promise: None,

@@ -53,6 +53,10 @@ struct Cli {
     #[arg(value_name = "PROMPT")]
     prompt: Option<String>,
 
+    /// Read the prompt from a file instead of the command line
+    #[arg(long = "prompt-file", value_name = "FILE")]
+    prompt_file: Option<PathBuf>,
+
     /// Maximum number of iterations
     #[arg(short = 'n', long, default_value = "10")]
     max_iterations: u32,
@@ -100,6 +104,26 @@ struct Cli {
     /// Resume from existing state
     #[arg(long)]
     resume: bool,
+
+    /// Resume a previous Codex exec session (applies to iteration 1 only)
+    #[arg(
+        long = "codex-resume",
+        value_name = "SESSION_ID",
+        conflicts_with = "codex_resume_last"
+    )]
+    codex_resume: Option<String>,
+
+    /// Resume the most recent Codex exec session (applies to iteration 1 only)
+    #[arg(
+        long = "codex-resume-last",
+        default_value_t = false,
+        conflicts_with = "codex_resume"
+    )]
+    codex_resume_last: bool,
+
+    /// Reuse the same Codex session across iterations (persist resume id)
+    #[arg(long = "one-session", default_value_t = false)]
+    one_session: bool,
 
     /// Additional context to inject
     #[arg(long)]
@@ -585,16 +609,36 @@ async fn main() -> Result<()> {
 
     // Main loop execution
     if cli.resume {
+        if cli.one_session || cli.codex_resume_last || cli.codex_resume.is_some() {
+            return Err(anyhow!(
+                "--resume uses saved state; start a new loop to change --one-session or --codex-resume*"
+            ));
+        }
         if !state_exists() {
             return Err(anyhow!("No existing state to resume from"));
         }
         println!("{}", "Resuming from existing state...".cyan());
         run_ralph_loop(None, &cli).await?;
     } else {
-        let prompt = cli
-            .prompt
-            .as_ref()
-            .ok_or_else(|| anyhow!("Prompt is required"))?;
+        let prompt = match (&cli.prompt_file, &cli.prompt) {
+            (Some(_), Some(_)) => {
+                return Err(anyhow!("Use either PROMPT or --prompt-file, not both"));
+            }
+            (Some(path), None) => {
+                let contents = std::fs::read_to_string(path).map_err(|err| {
+                    anyhow!("Failed to read prompt file {}: {}", path.display(), err)
+                })?;
+                let trimmed = contents.trim_end_matches(&['\r', '\n'][..]);
+                if trimmed.is_empty() {
+                    return Err(anyhow!("Prompt file is empty"));
+                }
+                trimmed.to_string()
+            }
+            (None, Some(prompt)) => prompt.clone(),
+            (None, None) => {
+                return Err(anyhow!("Prompt is required (use PROMPT or --prompt-file)"));
+            }
+        };
 
         if state_exists() {
             return Err(anyhow!(
@@ -636,6 +680,10 @@ async fn run_ralph_loop(prompt: Option<String>, cli: &Cli) -> Result<()> {
 
         s.promise = cli.promise.clone();
         s.tasks_file = cli.tasks.clone();
+        s.one_session = cli.one_session;
+        if cli.one_session {
+            s.codex_resume_session = cli.codex_resume.clone();
+        }
 
         save_state(&s)?;
         s
@@ -644,6 +692,13 @@ async fn run_ralph_loop(prompt: Option<String>, cli: &Cli) -> Result<()> {
     };
 
     let mut history = load_history()?;
+
+    let wants_codex_resume = cli.codex_resume_last || cli.codex_resume.is_some();
+    if wants_codex_resume && state.iteration != 1 {
+        return Err(anyhow!(
+            "--codex-resume* can only be used when starting a fresh loop (iteration 1)"
+        ));
+    }
 
     let mut codex_tui = if cli.codex_render == CodexRenderMode::Tui {
         Some(CodexTui::new(CodexTuiMeta {
@@ -709,6 +764,17 @@ async fn run_ralph_loop(prompt: Option<String>, cli: &Cli) -> Result<()> {
             requested_model.as_deref(),
             &codex_config_defaults,
         );
+
+        let use_codex_resume = agent_type == AgentType::Codex
+            && (state.one_session && state.codex_resume_session.is_some()
+                || (state.iteration == 1 && wants_codex_resume));
+        if (state.iteration == 1 && (state.one_session || wants_codex_resume))
+            && agent_type != AgentType::Codex
+        {
+            return Err(anyhow!(
+                "--codex-resume* and --one-session require --agent codex on the first iteration"
+            ));
+        }
 
         if let Some(tui) = codex_tui.as_mut() {
             tui.push_raw_stdout(format!(
@@ -793,8 +859,24 @@ async fn run_ralph_loop(prompt: Option<String>, cli: &Cli) -> Result<()> {
         let output_last_message_path =
             (agent_type == AgentType::Codex).then_some(get_last_message_capture_path());
 
+        let effective_codex_resume_session = if use_codex_resume {
+            state.codex_resume_session.clone().or_else(|| {
+                if state.iteration == 1 {
+                    cli.codex_resume.clone()
+                } else {
+                    None
+                }
+            })
+        } else {
+            None
+        };
+        let effective_codex_resume_last =
+            use_codex_resume && effective_codex_resume_session.is_none() && cli.codex_resume_last;
+
         let args_options = AgentBuildArgsOptions {
             allow_all_permissions: false,
+            codex_resume_last: effective_codex_resume_last,
+            codex_resume_session: effective_codex_resume_session,
             extra_flags: Vec::new(),
             stream_output: true,
             sandbox_mode: (agent_type == AgentType::Codex).then_some(cli.codex_sandbox),
@@ -963,6 +1045,16 @@ async fn run_ralph_loop(prompt: Option<String>, cli: &Cli) -> Result<()> {
                                                     Some(progress.clone()),
                                                     renderer.current_status_line(),
                                                 )?;
+                                            }
+                                        }
+                                        if state.one_session && agent_type == AgentType::Codex {
+                                            if let Some(thread_id) = progress.thread_id.clone() {
+                                                if state.codex_resume_session.as_deref()
+                                                    != Some(thread_id.as_str())
+                                                {
+                                                    state.codex_resume_session = Some(thread_id);
+                                                    save_state(&state)?;
+                                                }
                                             }
                                         }
                                     }

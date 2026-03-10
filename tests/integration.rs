@@ -29,6 +29,8 @@ mod tests {
         let agent = agent::create_default_agent(AgentType::Codex);
         let options = AgentBuildArgsOptions {
             allow_all_permissions: false,
+            codex_resume_last: false,
+            codex_resume_session: None,
             extra_flags: Vec::new(),
             stream_output: true,
             sandbox_mode: Some(SandboxMode::WorkspaceWrite),
@@ -62,6 +64,8 @@ mod tests {
         let agent = agent::create_default_agent(AgentType::Codex);
         let options = AgentBuildArgsOptions {
             allow_all_permissions: false,
+            codex_resume_last: false,
+            codex_resume_session: None,
             extra_flags: Vec::new(),
             stream_output: true,
             sandbox_mode: Some(SandboxMode::WorkspaceWrite),
