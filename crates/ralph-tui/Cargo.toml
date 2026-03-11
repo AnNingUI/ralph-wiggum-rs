@@ -1,0 +1,17 @@
+[package]
+name = "ralph-tui"
+description = "Agent-agnostic TUI for ralph-wiggum powered by ratatui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ralph-core = { workspace = true }
+anyhow = { workspace = true }
+crossterm = { workspace = true }
+ratatui = { workspace = true }
+
+[dev-dependencies]
+tokio-test = "0.4"

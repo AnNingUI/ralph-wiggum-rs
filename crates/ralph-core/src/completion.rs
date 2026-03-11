@@ -1,5 +1,3 @@
-//! Completion detection helpers used by the Ralph loop.
-
 use regex::Regex;
 use std::sync::OnceLock;
 
@@ -14,17 +12,16 @@ fn get_checkbox_pattern() -> &'static Regex {
     CHECKBOX_PATTERN.get_or_init(|| Regex::new(r"^\s*-\s+\[([ xX/])\]\s+").unwrap())
 }
 
-/// Strips ANSI escape codes from input string
 pub fn strip_ansi(input: &str) -> String {
     get_ansi_pattern().replace_all(input, "").into_owned()
 }
 
-/// Escapes special regex characters
 pub fn escape_regex(s: &str) -> String {
     let mut result = String::with_capacity(s.len() * 2);
     for c in s.chars() {
         match c {
-            '.' | '*' | '+' | '?' | '^' | '$' | '{' | '}' | '(' | ')' | '|' | '[' | ']' | '\\' => {
+            '.' | '*' | '+' | '?' | '^' | '$' | '{' | '}' | '(' | ')' | '|' | '[' | ']'
+            | '\\' => {
                 result.push('\\');
                 result.push(c);
             }
@@ -34,7 +31,6 @@ pub fn escape_regex(s: &str) -> String {
     result
 }
 
-/// Returns the last non-empty line of output, after ANSI stripping
 pub fn get_last_non_empty_line(output: &str) -> Option<String> {
     strip_ansi(output)
         .replace("\r\n", "\n")
@@ -45,7 +41,6 @@ pub fn get_last_non_empty_line(output: &str) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-/// Checks whether the exact promise tag appears as the final non-empty line
 pub fn check_terminal_promise(output: &str, promise: &str) -> bool {
     let last_line = match get_last_non_empty_line(output) {
         Some(line) => line,
@@ -61,7 +56,6 @@ pub fn check_terminal_promise(output: &str, promise: &str) -> bool {
     }
 }
 
-/// Returns true only when there is at least one task checkbox and all checkboxes are complete
 pub fn tasks_markdown_all_complete(tasks_markdown: &str) -> bool {
     let pattern = get_checkbox_pattern();
     let mut saw_task = false;

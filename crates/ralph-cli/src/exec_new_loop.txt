@@ -1,0 +1,62 @@
+
+    // Main processing loop with interrupt checking
+    let mut interrupt_check_interval = interval(tokio::time::Duration::from_millis(50));
+    interrupt_check_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    interrupt_check_interval.tick().await;
+
+    loop {
+        tokio::select! {
+            biased;
+
+            // High priority: check for user interrupt every 50ms
+            _ = interrupt_check_interval.tick() => {
+                if sink.check_interrupt()? {
+                    let _ = child.kill().await;
+                    return Ok(ExecutionResult {
+                        output_buffer: output.output_buffer,
+                        tools_used: output.tools_used,
+                        latest_ai_response: output.latest_ai_response,
+                        exit_code: -1,
+                        interrupted: true,
+                    });
+                }
+            }
+
+            // Process stream messages
+            msg = stream_rx.recv() => {
+                match msg {
+                    Some(StreamMessage::StdoutLine(line)) => {
+                        let mut ctx = RunContext {
+                            output: &mut output,
+                            sink,
+                            progress,
+                            project_dir,
+                        };
+                        runner.handle_stdout(&line, &mut ctx)?;
+                    }
+                    Some(StreamMessage::StderrLine(line)) => {
+                        let mut ctx = RunContext {
+                            output: &mut output,
+                            sink,
+                            progress,
+                            project_dir,
+                        };
+                        runner.handle_stderr(&line, &mut ctx)?;
+                    }
+                    Some(StreamMessage::Tick) => {
+                        let mut ctx = RunContext {
+                            output: &mut output,
+                            sink,
+                            progress,
+                            project_dir,
+                        };
+                        runner.on_tick(&mut ctx)?;
+                    }
+                    None => {
+                        // All streams closed, exit loop
+                        break;
+                    }
+                }
+            }
+        }
+    }

@@ -1,0 +1,25 @@
+[package]
+name = "ralph-cli"
+description = "CLI orchestration: agent registry, execution engine, and loop runner for ralph-wiggum"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ralph-core = { workspace = true }
+ralph-codex = { workspace = true }
+ralph-claude = { workspace = true }
+ralph-tui = { workspace = true }
+ralph-ratatui-ext = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+chrono = { workspace = true }
+colored = { workspace = true }
+clap = { workspace = true }
+
+[dev-dependencies]
+tokio-test = "0.4"

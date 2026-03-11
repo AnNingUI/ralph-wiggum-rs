@@ -1,12 +1,8 @@
-//! Utility functions for Ralph Wiggum
-
-use anyhow::Result;
 use std::path::Path;
-use tokio::fs;
+use std::process::{Command, Stdio};
 
 pub const PREV_AI_SYSTEM_PROMPT: &str = "你现在再ralph模式下无线单用户提示词的循环迭代中，prev-ai块是上一次的结论，请继续完成用户发布的任务，并在完成了你的任务后提交本次任务的总结方便下一轮AI承接你的工作";
 
-/// Format duration in human-readable format
 pub fn format_duration(ms: u64) -> String {
     let seconds = ms / 1000;
     let minutes = seconds / 60;
@@ -21,7 +17,6 @@ pub fn format_duration(ms: u64) -> String {
     }
 }
 
-/// Check if a command exists in PATH
 pub async fn command_exists(cmd: &str) -> bool {
     #[cfg(target_os = "windows")]
     let which_cmd = "where";
@@ -38,19 +33,44 @@ pub async fn command_exists(cmd: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Get file modification time
-pub async fn get_file_mtime(path: &Path) -> Result<std::time::SystemTime> {
-    let metadata = fs::metadata(path).await?;
+pub fn command_exists_blocking(cmd: &str) -> bool {
+    #[cfg(target_os = "windows")]
+    let which_cmd = "where";
+    #[cfg(not(target_os = "windows"))]
+    let which_cmd = "which";
+
+    Command::new(which_cmd)
+        .arg(cmd)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+pub async fn get_file_mtime(path: &Path) -> anyhow::Result<std::time::SystemTime> {
+    let metadata = tokio::fs::metadata(path).await?;
     Ok(metadata.modified()?)
 }
 
-/// Truncate string to max length with ellipsis
 pub fn truncate_string(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max_len.saturating_sub(3)])
+    if max_len == 0 {
+        return String::new();
     }
+
+    let char_count = s.chars().count();
+    if char_count <= max_len {
+        return s.to_string();
+    }
+
+    if max_len <= 3 {
+        return s.chars().take(max_len).collect();
+    }
+
+    let take_len = max_len - 3;
+    let mut truncated: String = s.chars().take(take_len).collect();
+    truncated.push_str("...");
+    truncated
 }
 
 fn sanitize_prev_ai_content(content: &str) -> String {

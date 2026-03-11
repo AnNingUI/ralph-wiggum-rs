@@ -1,0 +1,18 @@
+[package]
+name = "ralph-codex"
+description = "Codex agent plugin for ralph-wiggum"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ralph-core = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+colored = { workspace = true }
+
+[dev-dependencies]
+tokio-test = "0.4"

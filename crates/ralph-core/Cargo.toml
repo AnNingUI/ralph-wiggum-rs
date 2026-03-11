@@ -1,0 +1,25 @@
+[package]
+name = "ralph-core"
+description = "Core types, traits, and unified event protocol for ralph-wiggum"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+regex = { workspace = true }
+chrono = { workspace = true }
+colored = { workspace = true }
+crossterm = { workspace = true }
+clap = { workspace = true, optional = true }
+
+[features]
+clap = ["dep:clap"]
+
+[dev-dependencies]
+tokio-test = "0.4"

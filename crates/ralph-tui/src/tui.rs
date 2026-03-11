@@ -1,3 +1,8 @@
+//! Agent-agnostic ratatui TUI for ralph-wiggum.
+//!
+//! Adapted from the Codex-specific `CodexTui` to work with the unified
+//! `ProgressSnapshot`, `RenderLine`, and `StatusMeta` types from ralph-core.
+
 use anyhow::Result;
 use crossterm::{
     cursor::{Hide, Show},
@@ -16,30 +21,13 @@ use ratatui::{
 use std::io::{self, Stdout};
 use std::time::Duration as StdDuration;
 
-use crate::{CodexProgressSnapshot, CodexRenderLine, CodexRenderLineKind};
+use ralph_core::progress::ProgressSnapshot;
+use ralph_core::render::{RenderKind, RenderLine};
+use ralph_core::status::{StatusMeta, shorten_middle};
+
+use crate::status_bar::build_metrics_text;
 
 const MAX_LOG_LINES: usize = 2_000;
-
-#[derive(Debug, Clone)]
-pub struct CodexTuiMeta {
-    pub model: String,
-    pub reasoning_effort: String,
-    pub project_path: String,
-    pub iteration: u32,
-    pub max_iterations: u32,
-}
-
-pub struct CodexTui {
-    terminal: Terminal<CrosstermBackend<Stdout>>,
-    meta: CodexTuiMeta,
-    logs: Vec<CodexRenderLine>,
-    progress: Option<CodexProgressSnapshot>,
-    transcript_scroll: usize,
-    transcript_follow: bool,
-    active_panel: ActivePanel,
-    footer: Option<String>,
-    restored: bool,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ActivePanel {
@@ -53,8 +41,20 @@ pub enum TuiInputAction {
     ExitRequested,
 }
 
-impl CodexTui {
-    pub fn new(meta: CodexTuiMeta) -> Result<Self> {
+pub struct RalphTui {
+    terminal: Terminal<CrosstermBackend<Stdout>>,
+    meta: StatusMeta,
+    logs: Vec<RenderLine>,
+    progress: Option<ProgressSnapshot>,
+    transcript_scroll: usize,
+    transcript_follow: bool,
+    active_panel: ActivePanel,
+    footer: Option<String>,
+    restored: bool,
+}
+
+impl RalphTui {
+    pub fn new(meta: StatusMeta) -> Result<Self> {
         enable_raw_mode()?;
         let mut stdout = io::stdout();
         execute!(stdout, EnterAlternateScreen, Hide)?;
@@ -63,7 +63,7 @@ impl CodexTui {
         let mut terminal = Terminal::new(backend)?;
         terminal.clear()?;
 
-        let mut ui = Self {
+        let mut tui = Self {
             terminal,
             meta,
             logs: Vec::new(),
@@ -74,16 +74,17 @@ impl CodexTui {
             footer: None,
             restored: false,
         };
-        ui.render()?;
-        Ok(ui)
+        tui.draw()?;
+        Ok(tui)
     }
 
-    pub fn push_render_line(&mut self, mut render_line: CodexRenderLine) -> Result<()> {
+    pub fn push_render_line(&mut self, mut render_line: RenderLine) -> Result<()> {
         render_line.text = render_line.text.replace('\r', "");
         if render_line.text.trim().is_empty() {
             return Ok(());
         }
 
+        // Deduplicate consecutive identical lines
         if self
             .logs
             .last()
@@ -102,39 +103,25 @@ impl CodexTui {
         } else {
             self.clamp_transcript_scroll();
         }
-        self.render()
+        self.draw()
     }
 
-    pub fn set_meta(&mut self, meta: CodexTuiMeta) -> Result<()> {
+    pub fn set_meta(&mut self, meta: StatusMeta) -> Result<()> {
         self.meta = meta;
-        self.render()
+        self.draw()
     }
 
-    pub fn push_stderr(&mut self, text: impl Into<String>) -> Result<()> {
-        self.push_render_line(CodexRenderLine {
-            kind: CodexRenderLineKind::Error,
-            text: text.into(),
-        })
-    }
-
-    pub fn push_raw_stdout(&mut self, text: impl Into<String>) -> Result<()> {
-        self.push_render_line(CodexRenderLine {
-            kind: CodexRenderLineKind::Status,
-            text: text.into(),
-        })
-    }
-
-    pub fn set_progress(&mut self, progress: Option<CodexProgressSnapshot>) -> Result<()> {
+    pub fn set_progress(&mut self, progress: Option<ProgressSnapshot>) -> Result<()> {
         if self.progress == progress {
             return Ok(());
         }
         self.progress = progress;
-        self.render()
+        self.draw()
     }
 
     pub fn set_runtime(
         &mut self,
-        progress: Option<CodexProgressSnapshot>,
+        progress: Option<ProgressSnapshot>,
         footer: Option<String>,
     ) -> Result<()> {
         let changed = self.progress != progress || self.footer != footer;
@@ -143,7 +130,15 @@ impl CodexTui {
         }
         self.progress = progress;
         self.footer = footer;
-        self.render()
+        self.draw()
+    }
+
+    pub fn set_footer(&mut self, footer: Option<String>) -> Result<()> {
+        if self.footer == footer {
+            return Ok(());
+        }
+        self.footer = footer;
+        self.draw()
     }
 
     pub fn handle_input(&mut self) -> Result<TuiInputAction> {
@@ -215,24 +210,16 @@ impl CodexTui {
 
         if changed {
             self.clamp_transcript_scroll();
-            self.render()?;
+            self.draw()?;
         }
         Ok(TuiInputAction::Continue)
-    }
-
-    pub fn set_footer(&mut self, footer: Option<String>) -> Result<()> {
-        if self.footer == footer {
-            return Ok(());
-        }
-        self.footer = footer;
-        self.render()
     }
 
     pub fn finish(mut self) -> Result<()> {
         self.restore()
     }
 
-    fn render(&mut self) -> Result<()> {
+    fn draw(&mut self) -> Result<()> {
         let meta = self.meta.clone();
         let footer = self.footer.clone();
         let progress = self.progress.clone();
@@ -240,6 +227,13 @@ impl CodexTui {
         let active_panel = self.active_panel;
         let transcript_scroll = self.transcript_scroll;
         let transcript_follow = self.transcript_follow;
+        let (loop_iteration, loop_max) = progress
+            .as_ref()
+            .and_then(|snapshot| match (snapshot.loop_iteration, snapshot.loop_max) {
+                (Some(iteration), Some(max)) => Some((iteration, max)),
+                _ => None,
+            })
+            .unwrap_or((meta.iteration, meta.max_iterations));
 
         self.terminal.draw(|frame| {
             let area = frame.area();
@@ -253,9 +247,11 @@ impl CodexTui {
                 ])
                 .split(area);
 
+            // Header panel — agent-agnostic title
+            let title = format!(" {} Session ", capitalize(&meta.agent));
             let header_block = Block::default()
                 .title(Span::styled(
-                    " Codex Session ",
+                    title,
                     Style::default()
                         .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD),
@@ -274,18 +270,25 @@ impl CodexTui {
                 ])
                 .split(inner);
 
-            let info = Line::from(vec![
+            // Row 0: model · effort · loop
+            let mut info_spans = vec![
                 Span::styled("model ", Style::default().fg(Color::DarkGray)),
-                Span::styled(meta.model, Style::default().fg(Color::Cyan)),
-                Span::raw("  "),
-                Span::styled("effort ", Style::default().fg(Color::DarkGray)),
-                Span::raw(meta.reasoning_effort),
-                Span::raw("  "),
-                Span::styled("loop ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!("{}/{}", meta.iteration, meta.max_iterations)),
-            ]);
-            frame.render_widget(Paragraph::new(info), header_rows[0]);
+                Span::styled(&meta.model, Style::default().fg(Color::Cyan)),
+            ];
+            if !meta.effort.is_empty() {
+                info_spans.push(Span::raw("  "));
+                info_spans.push(Span::styled(
+                    "effort ",
+                    Style::default().fg(Color::DarkGray),
+                ));
+                info_spans.push(Span::raw(&meta.effort));
+            }
+            info_spans.push(Span::raw("  "));
+            info_spans.push(Span::styled("loop ", Style::default().fg(Color::DarkGray)));
+            info_spans.push(Span::raw(format!("{}/{}", loop_iteration, loop_max)));
+            frame.render_widget(Paragraph::new(Line::from(info_spans)), header_rows[0]);
 
+            // Row 1: path
             let path_max = area.width.saturating_sub(16).clamp(18, 88) as usize;
             let path_line = Line::from(vec![
                 Span::styled("path ", Style::default().fg(Color::DarkGray)),
@@ -293,6 +296,7 @@ impl CodexTui {
             ]);
             frame.render_widget(Paragraph::new(path_line), header_rows[1]);
 
+            // Row 2: metrics from ProgressSnapshot
             let metrics_max = area.width.saturating_sub(18).clamp(24, 120) as usize;
             let metrics = build_metrics_text(progress.as_ref());
             let metrics_line = Line::from(vec![
@@ -301,24 +305,26 @@ impl CodexTui {
             ]);
             frame.render_widget(Paragraph::new(metrics_line), header_rows[2]);
 
-            let ratio = if meta.max_iterations == 0 {
+            // Row 3: iteration gauge
+            let ratio = if loop_max == 0 {
                 0.0
             } else {
-                (meta.iteration as f64 / meta.max_iterations as f64).clamp(0.0, 1.0)
+                (loop_iteration as f64 / loop_max as f64).clamp(0.0, 1.0)
             };
             let gauge = Gauge::default()
                 .gauge_style(Style::default().fg(Color::Cyan))
                 .ratio(ratio)
                 .label(format!(
                     "iteration {}/{}",
-                    meta.iteration, meta.max_iterations
+                    loop_iteration, loop_max
                 ));
             frame.render_widget(gauge, header_rows[3]);
 
+            // Transcript panel
             let visible_count = root[1].height.saturating_sub(2) as usize;
             let transcript_lines: Vec<Line> = if logs.is_empty() {
                 vec![Line::from(Span::styled(
-                    "[status ] waiting for codex output...",
+                    "[status ] waiting for agent output...",
                     Style::default().fg(Color::DarkGray),
                 ))]
             } else {
@@ -329,12 +335,11 @@ impl CodexTui {
                 let start = end.saturating_sub(view_height);
                 logs[start..end]
                     .iter()
-                    .into_iter()
                     .map(|log| {
                         let (prefix, prefix_style, body_style) = kind_visual(&log.kind);
                         Line::from(vec![
                             Span::styled(format!("[{prefix:<7}] "), prefix_style),
-                            Span::styled(log.text.clone(), body_style),
+                            Span::styled(&log.text, body_style),
                         ])
                     })
                     .collect()
@@ -360,14 +365,13 @@ impl CodexTui {
                 .wrap(Wrap { trim: false });
             frame.render_widget(transcript, root[1]);
 
+            // Status/footer panel
             let footer_present = footer.is_some();
             let status_text = footer.unwrap_or_else(|| "idle".to_string());
             let status_block = Block::default()
                 .title(" Status ")
                 .borders(Borders::ALL)
-                .border_style(if active_panel == ActivePanel::Status {
-                    Style::default().fg(Color::Cyan)
-                } else if footer_present {
+                .border_style(if active_panel == ActivePanel::Status || footer_present {
                     Style::default().fg(Color::Cyan)
                 } else {
                     Style::default().fg(Color::DarkGray)
@@ -378,6 +382,7 @@ impl CodexTui {
                 .style(Style::default().fg(Color::Gray));
             frame.render_widget(status, root[2]);
 
+            // Hint bar
             let hint = Paragraph::new(Line::from(vec![
                 Span::styled("ctrl+c", Style::default().fg(Color::Yellow)),
                 Span::styled("/esc exit  ", Style::default().fg(Color::DarkGray)),
@@ -390,12 +395,7 @@ impl CodexTui {
                 Span::styled("f", Style::default().fg(Color::Yellow)),
                 Span::styled(" follow  ", Style::default().fg(Color::DarkGray)),
                 Span::styled("tab", Style::default().fg(Color::Yellow)),
-                Span::styled(" switch panel  ", Style::default().fg(Color::DarkGray)),
-                Span::styled("--codex-render", Style::default().fg(Color::Yellow)),
-                Span::styled(
-                    " plain|rich|tui|json-pass|event-json",
-                    Style::default().fg(Color::DarkGray),
-                ),
+                Span::styled(" switch panel", Style::default().fg(Color::DarkGray)),
             ]))
             .style(Style::default().fg(Color::DarkGray))
             .wrap(Wrap { trim: true });
@@ -409,7 +409,6 @@ impl CodexTui {
         if self.restored {
             return Ok(());
         }
-
         disable_raw_mode()?;
         execute!(self.terminal.backend_mut(), Show, LeaveAlternateScreen)?;
         self.terminal.show_cursor()?;
@@ -433,49 +432,64 @@ impl CodexTui {
     }
 }
 
-impl Drop for CodexTui {
+impl Drop for RalphTui {
     fn drop(&mut self) {
         let _ = self.restore();
     }
 }
 
-fn kind_visual(kind: &CodexRenderLineKind) -> (&'static str, Style, Style) {
+/// Map RenderKind to (prefix, prefix_style, body_style) for the transcript panel.
+fn kind_visual(kind: &RenderKind) -> (&'static str, Style, Style) {
     match kind {
-        CodexRenderLineKind::Assistant => (
-            "assistant",
+        RenderKind::Assistant => (
+            "asst",
             Style::default()
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD),
             Style::default().fg(Color::White),
         ),
-        CodexRenderLineKind::Reasoning => (
+        RenderKind::Reasoning => (
             "reason",
             Style::default().fg(Color::Blue),
             Style::default().fg(Color::Gray),
         ),
-        CodexRenderLineKind::Tool => (
+        RenderKind::ToolCall => (
             "tool",
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
             Style::default().fg(Color::Cyan),
         ),
-        CodexRenderLineKind::ToolOutput => (
+        RenderKind::ToolOutput | RenderKind::ToolOutputDelta => (
             "output",
             Style::default().fg(Color::DarkGray),
             Style::default().fg(Color::Gray),
         ),
-        CodexRenderLineKind::Status => (
+        RenderKind::Approval => (
+            "approve",
+            Style::default()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD),
+            Style::default().fg(Color::Magenta),
+        ),
+        RenderKind::Status | RenderKind::Progress | RenderKind::Subagent => (
             "status",
             Style::default().fg(Color::DarkGray),
             Style::default().fg(Color::DarkGray),
         ),
-        CodexRenderLineKind::Error => (
+        RenderKind::Error => (
             "error",
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Red)
+                .add_modifier(Modifier::BOLD),
             Style::default().fg(Color::Red),
         ),
-        CodexRenderLineKind::Todo => (
+        RenderKind::Mcp => (
+            "mcp",
+            Style::default().fg(Color::Yellow),
+            Style::default().fg(Color::Yellow),
+        ),
+        RenderKind::Todo => (
             "todo",
             Style::default()
                 .fg(Color::Yellow)
@@ -485,95 +499,13 @@ fn kind_visual(kind: &CodexRenderLineKind) -> (&'static str, Style, Style) {
     }
 }
 
-fn shorten_middle(value: &str, max_chars: usize) -> String {
-    let char_count = value.chars().count();
-    if char_count <= max_chars || max_chars <= 6 {
-        return value.to_string();
-    }
-
-    let head = max_chars / 2;
-    let tail = max_chars.saturating_sub(head + 3);
-    let prefix = value.chars().take(head).collect::<String>();
-    let suffix = value
-        .chars()
-        .rev()
-        .take(tail)
-        .collect::<String>()
-        .chars()
-        .rev()
-        .collect::<String>();
-    format!("{prefix}...{suffix}")
-}
-
-fn build_metrics_text(progress: Option<&CodexProgressSnapshot>) -> String {
-    let Some(progress) = progress else {
-        return "phase booting".to_string();
-    };
-
-    let mut parts = Vec::new();
-    parts.push(format!("phase {}", progress.phase));
-    parts.push(format!("tools {}", progress.tool_calls));
-
-    if progress.todo_total > 0 {
-        parts.push(format!(
-            "todo {}/{}",
-            progress.todo_completed, progress.todo_total
-        ));
-    }
-
-    if let Some(last_tool) = progress
-        .last_tool
-        .as_deref()
-        .filter(|tool| !tool.is_empty())
-    {
-        parts.push(format!("last {last_tool}"));
-    }
-
-    if let Some(thread_id) = progress
-        .thread_id
-        .as_deref()
-        .filter(|thread_id| !thread_id.is_empty())
-    {
-        parts.push(format!("thr {}", short_thread_id(thread_id)));
-    }
-
-    if let (Some(input), Some(cached), Some(output)) = (
-        progress.input_tokens,
-        progress.cached_input_tokens,
-        progress.output_tokens,
-    ) {
-        parts.push(format!(
-            "tok i{} c{} o{}",
-            compact_token(input),
-            compact_token(cached),
-            compact_token(output)
-        ));
-    }
-
-    parts.join(" · ")
-}
-
-fn short_thread_id(thread_id: &str) -> String {
-    let keep = 6;
-    if thread_id.chars().count() <= keep {
-        return thread_id.to_string();
-    }
-
-    thread_id
-        .chars()
-        .rev()
-        .take(keep)
-        .collect::<String>()
-        .chars()
-        .rev()
-        .collect()
-}
-
-fn compact_token(value: i64) -> String {
-    match value {
-        1_000_000.. => format!("{:.1}m", value as f64 / 1_000_000.0),
-        10_000.. => format!("{:.1}k", value as f64 / 1_000.0),
-        1_000.. => format!("{:.0}k", value as f64 / 1_000.0),
-        _ => value.to_string(),
+fn capitalize(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(first) => {
+            let upper: String = first.to_uppercase().collect();
+            upper + chars.as_str()
+        }
     }
 }

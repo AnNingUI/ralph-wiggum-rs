@@ -1,5 +1,3 @@
-//! State management for Ralph loop
-
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -172,6 +170,14 @@ pub fn load_history() -> Result<History> {
     let json = fs::read_to_string(path)?;
     let history = serde_json::from_str(&json)?;
     Ok(history)
+}
+
+pub fn clear_history() -> Result<()> {
+    let path = get_history_path();
+    if path.exists() {
+        fs::remove_file(path)?;
+    }
+    Ok(())
 }
 
 pub fn save_context(context: &str) -> Result<()> {

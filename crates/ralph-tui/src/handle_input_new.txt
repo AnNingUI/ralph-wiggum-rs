@@ -1,0 +1,21 @@
+    pub fn handle_input(&mut self) -> Result<TuiInputAction> {
+        // Check if input thread detected interrupt
+        if self.interrupt_flag.load(Ordering::SeqCst) {
+            use std::io::Write;
+            let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("ralph_debug.log")
+                .and_then(|mut f| writeln!(f, "[DEBUG TUI] Interrupt flag detected in handle_input!"));
+            return Ok(TuiInputAction::ExitRequested);
+        }
+
+        // Flush pending lines and draw if needed
+        if !self.pending_lines.is_empty() {
+            self.flush_pending_lines()?;
+        } else {
+            self.draw_if_ready()?;
+        }
+
+        Ok(TuiInputAction::Continue)
+    }
