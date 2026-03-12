@@ -8,7 +8,7 @@ use ralph_core::types::{ApprovalPolicy, ClaudeLoopMode, ClaudeOutputFormat, Sand
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Parser, Debug)]
-#[command(name = "ralph")]
+#[command(name = "ralph-rs")]
 #[command(version = VERSION)]
 #[command(about = "Ralph Wiggum technique for iterative AI development loops")]
 pub struct Cli {
@@ -75,6 +75,55 @@ pub struct Cli {
     /// Output schema file for Codex structured output
     #[arg(long = "output-schema")]
     pub codex_output_schema: Option<PathBuf>,
+
+    // === OpenCode Options ===
+    /// Continue the last OpenCode session
+    #[arg(long)]
+    pub opencode_continue: bool,
+
+    /// OpenCode session ID to continue
+    #[arg(long)]
+    pub opencode_session: Option<String>,
+
+    /// Fork the OpenCode session before continuing
+    #[arg(long)]
+    pub opencode_fork: bool,
+
+    /// Files to attach to OpenCode message
+    #[arg(long = "opencode-file")]
+    pub opencode_files: Vec<PathBuf>,
+
+    /// Title for the OpenCode session
+    #[arg(long)]
+    pub opencode_title: Option<String>,
+
+    /// Attach to a running OpenCode server
+    #[arg(long)]
+    pub opencode_attach: Option<String>,
+
+    /// Directory to run OpenCode in
+    #[arg(long)]
+    pub opencode_dir: Option<PathBuf>,
+
+    /// Port for the local OpenCode server
+    #[arg(long)]
+    pub opencode_port: Option<u16>,
+
+    /// Model variant for OpenCode (reasoning effort)
+    #[arg(long)]
+    pub opencode_variant: Option<String>,
+
+    /// Show thinking blocks in OpenCode
+    #[arg(long)]
+    pub opencode_thinking: bool,
+
+    /// OpenCode output format (default or json)
+    #[arg(long)]
+    pub opencode_format: Option<String>,
+
+    /// Agent to use in OpenCode
+    #[arg(long)]
+    pub opencode_agent: Option<String>,
 
     // === Claude Options ===
     /// Claude output format

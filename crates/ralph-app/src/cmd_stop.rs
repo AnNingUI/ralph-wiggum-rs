@@ -20,7 +20,7 @@ pub fn run_stop() -> Result<()> {
 
     println!("{}", "Loop interrupted".green());
     println!("State preserved at iteration {}", state.iteration);
-    println!("Use {} to continue", "ralph --resume".cyan());
+    println!("Use {} to continue", "ralph-rs --resume".cyan());
 
     Ok(())
 }

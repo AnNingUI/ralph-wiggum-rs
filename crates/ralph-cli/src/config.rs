@@ -60,15 +60,14 @@ pub fn resolve_model(
     }
 
     // Codex config.toml default
-    if uses_codex_config(agent_type) {
-        if let Some(configured) = codex_config.model.clone() {
+    if uses_codex_config(agent_type)
+        && let Some(configured) = codex_config.model.clone() {
             return ResolvedModel {
                 execution_model: String::new(),
                 display_model: configured,
                 reasoning_effort: codex_config.reasoning_effort.clone(),
             };
         }
-    }
 
     // Fallback: implicit label
     ResolvedModel {
@@ -179,8 +178,9 @@ mod tests {
             None,
             &CodexConfigDefaults::default(),
         );
-        assert_eq!(resolved.execution_model, "claude-sonnet-4");
-        assert_eq!(resolved.display_model, "claude-sonnet-4");
+        // Since default_model() returns None, it falls back to implicit label
+        assert_eq!(resolved.execution_model, "");
+        assert_eq!(resolved.display_model, "default");
     }
 
     #[test]

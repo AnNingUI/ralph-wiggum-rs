@@ -122,11 +122,10 @@ pub async fn run_iteration(
     // Check completion
     let mut completed = false;
 
-    if let Some(promise) = &state.promise {
-        if check_terminal_promise(&completion_output, promise) {
+    if let Some(promise) = &state.promise
+        && check_terminal_promise(&completion_output, promise) {
             completed = true;
         }
-    }
 
     if let Some(tasks_file) = &state.tasks_file {
         let tasks_path = std::path::Path::new(tasks_file);
@@ -135,11 +134,10 @@ pub async fn run_iteration(
         } else {
             params.project_dir.join(tasks_path)
         };
-        if let Ok(tasks_content) = std::fs::read_to_string(&resolved_path) {
-            if tasks_markdown_all_complete(&tasks_content) {
+        if let Ok(tasks_content) = std::fs::read_to_string(&resolved_path)
+            && tasks_markdown_all_complete(&tasks_content) {
                 completed = true;
             }
-        }
     }
 
     let loop_feedback = params.runner.loop_feedback(&completion_output);
@@ -247,11 +245,11 @@ pub async fn run_loop(
 
         if result.completed {
             sink.render_line(&RenderLine::status("Task completed successfully!"))?;
-            sink.render_line(&RenderLine::status(&format!(
+            sink.render_line(&RenderLine::status(format!(
                 "Total iterations: {}",
                 state.iteration
             )))?;
-            sink.render_line(&RenderLine::status(&format!(
+            sink.render_line(&RenderLine::status(format!(
                 "Total time: {}ms",
                 history.total_duration_ms
             )))?;
@@ -277,19 +275,18 @@ pub async fn run_loop(
         }
 
         // Rotate agent if configured
-        if let Some(rotation) = &state.rotation {
-            if !rotation.is_empty() {
+        if let Some(rotation) = &state.rotation
+            && !rotation.is_empty() {
                 state.rotation_index =
                     Some((state.rotation_index.unwrap_or(0) + 1) % rotation.len());
             }
-        }
 
         state.iteration += 1;
         save_state(state)?;
 
         // Inter-iteration delay
         if should_continue(state.iteration, state.max_iterations) && delay_secs > 0 {
-            sink.render_line(&RenderLine::status(&format!(
+            sink.render_line(&RenderLine::status(format!(
                 "Waiting {delay_secs}s before next iteration..."
             )))?;
             sink.set_status(Some(format!(
@@ -317,7 +314,7 @@ pub async fn run_loop(
 
     // Max iterations reached
     sink.render_line(&RenderLine::status("Maximum iterations reached"))?;
-    sink.render_line(&RenderLine::status(&format!(
+    sink.render_line(&RenderLine::status(format!(
         "Total time: {}ms",
         history.total_duration_ms
     )))?;
@@ -344,8 +341,8 @@ fn max_iterations_label(max: u32) -> String {
 
 fn emit_loop_start(sink: &mut dyn OutputSink, state: &RalphState) -> Result<()> {
     sink.render_line(&RenderLine::status("Starting Ralph Wiggum loop..."))?;
-    sink.render_line(&RenderLine::status(&format!("Prompt: {}", state.prompt)))?;
-    sink.render_line(&RenderLine::status(&format!(
+    sink.render_line(&RenderLine::status(format!("Prompt: {}", state.prompt)))?;
+    sink.render_line(&RenderLine::status(format!(
         "Max iterations: {}",
         max_iterations_label(state.max_iterations)
     )))?;
@@ -353,7 +350,7 @@ fn emit_loop_start(sink: &mut dyn OutputSink, state: &RalphState) -> Result<()> 
 }
 
 fn emit_iteration_header(sink: &mut dyn OutputSink, state: &RalphState) -> Result<()> {
-    sink.render_line(&RenderLine::status(&format!(
+    sink.render_line(&RenderLine::status(format!(
         "--- Iteration {}/{} ---",
         state.iteration,
         max_iterations_label(state.max_iterations)

@@ -3,6 +3,7 @@ members = [
     "crates/ralph-core",
     "crates/ralph-codex",
     "crates/ralph-claude",
+    "crates/ralph-opencode",
     "crates/ralph-tui",
     "crates/ralph-cli",
     "crates/ralph-app",
@@ -33,6 +34,7 @@ clap = { version = "4.5", features = ["derive", "cargo"] }
 ralph-core = { path = "crates/ralph-core" }
 ralph-codex = { path = "crates/ralph-codex" }
 ralph-claude = { path = "crates/ralph-claude" }
+ralph-opencode = { path = "crates/ralph-opencode" }
 ralph-tui = { path = "crates/ralph-tui" }
 ralph-cli = { path = "crates/ralph-cli" }
 ralph-ratatui-ext = { path = "crates/ralph-ratatui-ext" }

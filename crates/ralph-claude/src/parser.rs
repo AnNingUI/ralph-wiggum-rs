@@ -97,9 +97,9 @@ impl ClaudeEventParser {
 
         // Tool result detection → ToolCallEnd
         // Check if this is a tool_result event by looking at the raw JSON structure
-        if update.tool_name.is_none() {
-            if let Some(tool_id) = &update.tool_id {
-                if let Some(tool_name) = self.pending_tools.remove(tool_id) {
+        if update.tool_name.is_none()
+            && let Some(tool_id) = &update.tool_id
+                && let Some(tool_name) = self.pending_tools.remove(tool_id) {
                     events.push(AgentEvent::ToolCallEnd {
                         call_id: tool_id.clone(),
                         tool: tool_name.clone(),
@@ -111,8 +111,6 @@ impl ClaudeEventParser {
                         "[tool:{tool_name}:completed]"
                     )));
                 }
-            }
-        }
 
         // Text handling
         if is_assistant {
@@ -123,11 +121,10 @@ impl ClaudeEventParser {
                 });
                 output_buffer_text = Some(delta.clone());
             }
-            if let Some(full_text) = &update.full_text {
-                if !full_text.trim().is_empty() {
+            if let Some(full_text) = &update.full_text
+                && !full_text.trim().is_empty() {
                     latest_response = Some(full_text.clone());
                 }
-            }
             for emitted in &update.emitted_lines {
                 lines.push(RenderLine::assistant(emitted.as_str()));
             }

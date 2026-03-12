@@ -10,13 +10,14 @@ pub struct AgentRegistry {
 }
 
 impl AgentRegistry {
-    /// Create a registry with the built-in Codex and Claude plugins.
+    /// Create a registry with the built-in Codex, Claude, and OpenCode plugins.
     pub fn new() -> Self {
         let mut registry = Self {
             plugins: HashMap::new(),
         };
         registry.register(ralph_codex::plugin());
         registry.register(ralph_claude::plugin());
+        registry.register(ralph_opencode::plugin());
         registry
     }
 
@@ -43,15 +44,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn registry_has_codex_and_claude() {
+    fn registry_has_all_agents() {
         let registry = AgentRegistry::new();
         assert!(registry.get(AgentType::Codex).is_ok());
         assert!(registry.get(AgentType::ClaudeCode).is_ok());
+        assert!(registry.get(AgentType::Opencode).is_ok());
     }
 
     #[test]
-    fn registry_rejects_unknown() {
+    fn registry_count() {
         let registry = AgentRegistry::new();
-        assert!(registry.get(AgentType::Opencode).is_err());
+        assert_eq!(registry.plugins.len(), 3); // Codex, Claude, Opencode
     }
 }

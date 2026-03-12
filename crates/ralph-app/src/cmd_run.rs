@@ -186,6 +186,18 @@ fn build_options(cli: &Cli, _codex_config: &ralph_cli::CodexConfigDefaults) -> R
         claude_init_only: cli.claude_init_only,
         claude_maintenance: cli.claude_maintenance,
         claude_loop_mode: Some(cli.claude_loop_mode),
+        opencode_continue: cli.opencode_continue,
+        opencode_session: cli.opencode_session.clone(),
+        opencode_fork: cli.opencode_fork,
+        opencode_files: cli.opencode_files.clone(),
+        opencode_title: cli.opencode_title.clone(),
+        opencode_attach: cli.opencode_attach.clone(),
+        opencode_dir: cli.opencode_dir.clone(),
+        opencode_port: cli.opencode_port,
+        opencode_variant: cli.opencode_variant.clone(),
+        opencode_thinking: cli.opencode_thinking,
+        opencode_format: cli.opencode_format.clone(),
+        opencode_agent: cli.opencode_agent.clone(),
     };
 
     Ok(builder.build())

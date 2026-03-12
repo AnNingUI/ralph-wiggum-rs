@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-use ralph_core::options::{AgentOptions, ClaudeOptions, CodexOptions, CommonOptions};
+use ralph_core::options::{AgentOptions, ClaudeOptions, CodexOptions, CommonOptions, OpencodeOptions};
 use ralph_core::types::{ApprovalPolicy, ClaudeLoopMode, ClaudeOutputFormat, SandboxMode};
 
 /// Builder for constructing AgentOptions from CLI-level values.
@@ -64,6 +64,20 @@ pub struct CliOptionsBuilder {
     pub claude_init_only: bool,
     pub claude_maintenance: bool,
     pub claude_loop_mode: Option<ClaudeLoopMode>,
+
+    // opencode
+    pub opencode_continue: bool,
+    pub opencode_session: Option<String>,
+    pub opencode_fork: bool,
+    pub opencode_files: Vec<PathBuf>,
+    pub opencode_title: Option<String>,
+    pub opencode_attach: Option<String>,
+    pub opencode_dir: Option<PathBuf>,
+    pub opencode_port: Option<u16>,
+    pub opencode_variant: Option<String>,
+    pub opencode_thinking: bool,
+    pub opencode_format: Option<String>,
+    pub opencode_agent: Option<String>,
 }
 
 impl CliOptionsBuilder {
@@ -121,6 +135,20 @@ impl CliOptionsBuilder {
                 init_only: self.claude_init_only,
                 maintenance: self.claude_maintenance,
                 loop_mode: self.claude_loop_mode,
+            },
+            opencode: OpencodeOptions {
+                continue_session: self.opencode_continue,
+                session_id: self.opencode_session,
+                fork_session: self.opencode_fork,
+                files: self.opencode_files,
+                title: self.opencode_title,
+                attach: self.opencode_attach,
+                dir: self.opencode_dir,
+                port: self.opencode_port,
+                variant: self.opencode_variant,
+                thinking: self.opencode_thinking,
+                format: self.opencode_format,
+                agent: self.opencode_agent,
             },
         }
     }

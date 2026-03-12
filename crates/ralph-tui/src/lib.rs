@@ -96,7 +96,7 @@ fn build_snapshot_footer(snapshot: &ProgressSnapshot) -> Option<String> {
     {
         parts.push(header.to_string());
     } else {
-        parts.push(format!("{}", snapshot.phase.label()));
+        parts.push(snapshot.phase.label().to_string());
     }
 
     if snapshot.tool_calls > 0 {

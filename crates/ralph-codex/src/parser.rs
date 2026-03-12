@@ -329,7 +329,7 @@ impl CodexEventParser {
                             text: text.clone(),
                             role: Role::Assistant,
                         }],
-                        lines: text.lines().map(|l| RenderLine::assistant(l)).collect(),
+                        lines: text.lines().map(RenderLine::assistant).collect(),
                         output_buffer_text: Some(text),
                         tool_name: None,
                     }
@@ -345,7 +345,7 @@ impl CodexEventParser {
 
             CodexThreadItemDetails::Reasoning { text } => ParseResult {
                 events: vec![AgentEvent::ReasoningDelta { text: text.clone() }],
-                lines: text.lines().map(|l| RenderLine::reasoning(l)).collect(),
+                lines: text.lines().map(RenderLine::reasoning).collect(),
                 output_buffer_text: None,
                 tool_name: None,
             },
@@ -433,7 +433,7 @@ impl CodexEventParser {
                         stream: OutputStream::Stdout,
                         chunk: delta.clone(),
                     });
-                    lines.extend(delta.lines().map(|l| RenderLine::tool_output_delta(l)));
+                    lines.extend(delta.lines().map(RenderLine::tool_output_delta));
                 }
 
                 ParseResult {
@@ -450,7 +450,7 @@ impl CodexEventParser {
                         stream: OutputStream::Stdout,
                         chunk: delta.clone(),
                     });
-                    lines.extend(delta.lines().map(|l| RenderLine::tool_output_delta(l)));
+                    lines.extend(delta.lines().map(RenderLine::tool_output_delta));
                 }
                 ParseResult {
                     events,
@@ -466,7 +466,7 @@ impl CodexEventParser {
                         stream: OutputStream::Stdout,
                         chunk: delta.clone(),
                     });
-                    lines.extend(delta.lines().map(|l| RenderLine::tool_output_delta(l)));
+                    lines.extend(delta.lines().map(RenderLine::tool_output_delta));
                 }
 
                 let tool_status = match status {
@@ -787,7 +787,7 @@ impl CodexEventParser {
         }];
 
         let lines = if changed {
-            snapshot.lines().map(|l| RenderLine::todo(l)).collect()
+            snapshot.lines().map(RenderLine::todo).collect()
         } else {
             vec![]
         };

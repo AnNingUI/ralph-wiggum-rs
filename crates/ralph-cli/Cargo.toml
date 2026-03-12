@@ -11,6 +11,7 @@ repository.workspace = true
 ralph-core = { workspace = true }
 ralph-codex = { workspace = true }
 ralph-claude = { workspace = true }
+ralph-opencode = { workspace = true }
 ralph-tui = { workspace = true }
 ralph-ratatui-ext = { workspace = true }
 anyhow = { workspace = true }

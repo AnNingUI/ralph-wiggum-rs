@@ -146,22 +146,18 @@ fn extract_text_delta(value: &Value) -> Option<String> {
             .get("type")
             .and_then(Value::as_str)
             .is_some_and(|ty| ty == "text_delta")
-        {
-            if let Some(text) = delta.get("text").and_then(Value::as_str) {
+            && let Some(text) = delta.get("text").and_then(Value::as_str) {
                 return Some(text.to_string());
             }
-        }
     }
 
     if value
         .get("type")
         .and_then(Value::as_str)
         .is_some_and(|ty| ty == "text_delta")
-    {
-        if let Some(text) = value.get("text").and_then(Value::as_str) {
+        && let Some(text) = value.get("text").and_then(Value::as_str) {
             return Some(text.to_string());
         }
-    }
 
     None
 }
@@ -171,11 +167,10 @@ fn extract_full_text(value: &Value) -> Option<String> {
         return Some(completion.to_string());
     }
 
-    if let Some(message) = value.get("message") {
-        if let Some(text) = collect_text_blocks(message.get("content")) {
+    if let Some(message) = value.get("message")
+        && let Some(text) = collect_text_blocks(message.get("content")) {
             return Some(text);
         }
-    }
 
     collect_text_blocks(value.get("content"))
 }
@@ -209,11 +204,10 @@ fn extract_role(value: &Value) -> Option<String> {
     if let Some(role) = value.get("role").and_then(Value::as_str) {
         return Some(role.to_string());
     }
-    if let Some(message) = value.get("message") {
-        if let Some(role) = message.get("role").and_then(Value::as_str) {
+    if let Some(message) = value.get("message")
+        && let Some(role) = message.get("role").and_then(Value::as_str) {
             return Some(role.to_string());
         }
-    }
     None
 }
 
@@ -301,15 +295,13 @@ fn find_tool_id(value: &Value) -> Option<String> {
                 .get("type")
                 .and_then(Value::as_str)
                 .is_some_and(|ty| ty == "tool_use" || ty == "tool_result")
-            {
-                if let Some(id) = map
+                && let Some(id) = map
                     .get("id")
                     .or_else(|| map.get("tool_use_id"))
                     .and_then(Value::as_str)
                 {
                     return Some(id.to_string());
                 }
-            }
             for v in map.values() {
                 if let Some(id) = find_tool_id(v) {
                     return Some(id);

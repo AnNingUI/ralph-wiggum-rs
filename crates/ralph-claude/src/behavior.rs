@@ -160,6 +160,8 @@ mod tests {
         let options = AgentOptions {
             claude: ClaudeOptions {
                 output_format: Some(ClaudeOutputFormat::StreamJson),
+                print_mode: false,
+                loop_mode: Some(ralph_core::types::ClaudeLoopMode::RalphPlugin),
                 ..Default::default()
             },
             ..Default::default()

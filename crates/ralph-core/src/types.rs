@@ -43,15 +43,12 @@ impl AgentType {
     }
 
     pub fn default_model(&self) -> Option<&'static str> {
-        match self {
-            Self::Opencode => Some("claude-sonnet-4"),
-            Self::ClaudeCode | Self::Codex | Self::Copilot => None,
-        }
+        None
     }
 
     pub fn implicit_model_label(&self) -> &'static str {
         match self {
-            Self::Opencode => "claude-sonnet-4",
+            Self::Opencode => "default",
             Self::ClaudeCode => "default",
             Self::Codex => "default",
             Self::Copilot => "copilot-default",

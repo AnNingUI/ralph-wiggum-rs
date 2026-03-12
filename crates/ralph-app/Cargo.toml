@@ -15,6 +15,7 @@ path = "src/main.rs"
 ralph-core = { workspace = true, features = ["clap"] }
 ralph-codex = { workspace = true }
 ralph-claude = { workspace = true }
+ralph-opencode = { workspace = true }
 ralph-tui = { workspace = true }
 ralph-cli = { workspace = true }
 anyhow = { workspace = true }

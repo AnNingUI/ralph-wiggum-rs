@@ -9,6 +9,7 @@ pub struct AgentOptions {
     pub common: CommonOptions,
     pub codex: CodexOptions,
     pub claude: ClaudeOptions,
+    pub opencode: OpencodeOptions,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -68,6 +69,22 @@ pub struct ClaudeOptions {
     pub init_only: bool,
     pub maintenance: bool,
     pub loop_mode: Option<ClaudeLoopMode>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct OpencodeOptions {
+    pub continue_session: bool,
+    pub session_id: Option<String>,
+    pub fork_session: bool,
+    pub files: Vec<PathBuf>,
+    pub title: Option<String>,
+    pub attach: Option<String>,
+    pub dir: Option<PathBuf>,
+    pub port: Option<u16>,
+    pub variant: Option<String>,
+    pub thinking: bool,
+    pub format: Option<String>,
+    pub agent: Option<String>,
 }
 
 /// Iteration state passed to plugins.
