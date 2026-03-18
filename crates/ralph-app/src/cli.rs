@@ -255,7 +255,7 @@ pub struct Cli {
     pub claude_loop_mode: ClaudeLoopMode,
 
     // === Loop Options ===
-    /// Always use one session (Codex)
+    /// Always use one session across iterations
     #[arg(long)]
     pub one_session: bool,
 

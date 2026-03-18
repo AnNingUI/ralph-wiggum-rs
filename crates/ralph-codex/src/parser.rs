@@ -1,10 +1,7 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 
-use ralph_core::{
-    AgentEvent, OutputStream, Role, ToolSource, ToolStatus,
-    RenderLine,
-};
+use ralph_core::{AgentEvent, OutputStream, RenderLine, Role, ToolSource, ToolStatus};
 
 // ── Raw Codex JSONL protocol types ──
 
@@ -343,12 +340,42 @@ impl CodexEventParser {
                 }
             }
 
-            CodexThreadItemDetails::Reasoning { text } => ParseResult {
-                events: vec![AgentEvent::ReasoningDelta { text: text.clone() }],
-                lines: text.lines().map(RenderLine::reasoning).collect(),
-                output_buffer_text: None,
-                tool_name: None,
-            },
+            CodexThreadItemDetails::Reasoning { text } => {
+                let mut events = Vec::new();
+                let mut lines = Vec::new();
+
+                if !text.trim().is_empty() {
+                    events.push(AgentEvent::ReasoningDelta { text: text.clone() });
+
+                    // Native-like rendering: extract **bold header** as a
+                    // one-line summary, then show the remaining body indented.
+                    let trimmed = text.trim();
+                    if let Some((header, body)) = extract_reasoning_header(trimmed) {
+                        lines.push(RenderLine::reasoning(format!("💭 {header}")));
+                        for line in body.lines() {
+                            let l = line.trim();
+                            if !l.is_empty() {
+                                lines.push(RenderLine::reasoning(format!("  {l}")));
+                            }
+                        }
+                    } else {
+                        // No bold header — emit each line prefixed with bullet
+                        for line in trimmed.lines() {
+                            let l = line.trim();
+                            if !l.is_empty() {
+                                lines.push(RenderLine::reasoning(format!("• {l}")));
+                            }
+                        }
+                    }
+                }
+
+                ParseResult {
+                    events,
+                    lines,
+                    output_buffer_text: None,
+                    tool_name: None,
+                }
+            }
 
             CodexThreadItemDetails::CommandExecution {
                 command,
@@ -522,9 +549,7 @@ impl CodexEventParser {
                     detail: Some(format!("{server}/{tool}")),
                     source: ToolSource::Mcp,
                 });
-                lines.push(RenderLine::tool_call(format!(
-                    "[tool:mcp] {server}/{tool}"
-                )));
+                lines.push(RenderLine::tool_call(format!("[tool:mcp] {server}/{tool}")));
 
                 ParseResult {
                     events,
@@ -599,9 +624,7 @@ impl CodexEventParser {
                     detail: Some(tool_name.clone()),
                     source: ToolSource::Agent,
                 });
-                lines.push(RenderLine::tool_call(format!(
-                    "[tool:collab] {tool_name}"
-                )));
+                lines.push(RenderLine::tool_call(format!("[tool:collab] {tool_name}")));
                 ParseResult {
                     events,
                     lines,
@@ -666,9 +689,7 @@ impl CodexEventParser {
                     detail: Some(query.to_string()),
                     source: ToolSource::Agent,
                 });
-                lines.push(RenderLine::tool_call(format!(
-                    "[tool:web_search] {query}"
-                )));
+                lines.push(RenderLine::tool_call(format!("[tool:web_search] {query}")));
                 ParseResult {
                     events,
                     lines,
@@ -835,6 +856,23 @@ pub fn is_transient_codex_progress_line(line: &str) -> bool {
     has_spinner_prefix || has_elapsed_segment
 }
 
+/// Extract the first `**bold header**` from reasoning text, returning
+/// `(header, remaining_body)`.  Mirrors the logic Codex's native TUI uses in
+/// `new_reasoning_summary_block`.
+fn extract_reasoning_header(text: &str) -> Option<(String, String)> {
+    let open = text.find("**")?;
+    let after_open = &text[(open + 2)..];
+    let close = after_open.find("**")?;
+    let header = after_open[..close].to_string();
+    let body_start = open + 2 + close + 2;
+    if body_start >= text.len() {
+        // Header only, no body — still return it so the caller can render the
+        // header line; body will be empty.
+        return Some((header, String::new()));
+    }
+    Some((header, text[body_start..].to_string()))
+}
+
 fn render_todo_list(items: &[CodexTodoItem]) -> String {
     items
         .iter()
@@ -882,10 +920,12 @@ mod tests {
                 output: Some(99),
             }
         )));
-        assert!(result
-            .events
-            .iter()
-            .any(|e| matches!(e, AgentEvent::TurnComplete)));
+        assert!(
+            result
+                .events
+                .iter()
+                .any(|e| matches!(e, AgentEvent::TurnComplete))
+        );
     }
 
     #[test]
@@ -940,7 +980,10 @@ mod tests {
             .unwrap();
         assert!(started.events.iter().any(|e| matches!(
             e,
-            AgentEvent::ToolCallBegin { source: ToolSource::Mcp, .. }
+            AgentEvent::ToolCallBegin {
+                source: ToolSource::Mcp,
+                ..
+            }
         )));
 
         let completed = parser
@@ -950,7 +993,10 @@ mod tests {
             .unwrap();
         assert!(completed.events.iter().any(|e| matches!(
             e,
-            AgentEvent::ToolCallEnd { status: ToolStatus::Completed, .. }
+            AgentEvent::ToolCallEnd {
+                status: ToolStatus::Completed,
+                ..
+            }
         )));
     }
 
@@ -963,10 +1009,12 @@ mod tests {
             )
             .unwrap();
 
-        assert!(result
-            .events
-            .iter()
-            .any(|e| matches!(e, AgentEvent::PlanUpdate { .. })));
+        assert!(
+            result
+                .events
+                .iter()
+                .any(|e| matches!(e, AgentEvent::PlanUpdate { .. }))
+        );
         assert_eq!(result.lines.len(), 1);
     }
 

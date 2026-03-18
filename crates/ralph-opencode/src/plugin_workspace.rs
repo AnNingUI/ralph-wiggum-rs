@@ -3,9 +3,9 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use super::plugin_catalog::{OpencodeWorkspace, OpencodePluginSource};
+use super::plugin_catalog::{OpencodePluginSource, OpencodeWorkspace};
 use super::plugin_components::{
-    OpencodeComponentCounts, OpencodePluginComponentInspector, FilesystemPluginComponentInspector,
+    FilesystemPluginComponentInspector, OpencodeComponentCounts, OpencodePluginComponentInspector,
 };
 
 #[derive(Debug, Clone)]
@@ -46,7 +46,11 @@ impl FilesystemOpencodeWorkspaceInspector {
 
         let opencode_dir = workspace.root().join(".opencode");
         let local_counts = if opencode_dir.is_dir() {
-            Some(self.component_inspector.inspect_components(&opencode_dir).counts())
+            Some(
+                self.component_inspector
+                    .inspect_components(&opencode_dir)
+                    .counts(),
+            )
         } else {
             None
         };
@@ -78,7 +82,10 @@ impl FilesystemOpencodeWorkspaceInspector {
             if !opencode_dir.is_dir() {
                 continue;
             }
-            let counts = self.component_inspector.inspect_components(&opencode_dir).counts();
+            let counts = self
+                .component_inspector
+                .inspect_components(&opencode_dir)
+                .counts();
             summaries.push(OpencodeProjectComponentsSummary {
                 root,
                 opencode_dir,

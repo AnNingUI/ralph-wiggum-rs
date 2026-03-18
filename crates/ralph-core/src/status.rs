@@ -73,7 +73,9 @@ impl StatusRenderer {
             let header = format!(
                 "Starting MCP servers ({}/{})",
                 snapshot.mcp_servers.ready,
-                snapshot.mcp_servers.ready + snapshot.mcp_servers.starting + snapshot.mcp_servers.failed,
+                snapshot.mcp_servers.ready
+                    + snapshot.mcp_servers.starting
+                    + snapshot.mcp_servers.failed,
             );
             return Some(self.build_line_with_header(snapshot, &header));
         }
@@ -111,9 +113,11 @@ impl StatusRenderer {
         let mut token_segment = None;
 
         // token summary
-        if let (Some(inp), Some(cached), Some(out)) =
-            (snapshot.input_tokens, snapshot.cached_tokens, snapshot.output_tokens)
-        {
+        if let (Some(inp), Some(cached), Some(out)) = (
+            snapshot.input_tokens,
+            snapshot.cached_tokens,
+            snapshot.output_tokens,
+        ) {
             token_segment = Some(format!(
                 "tok in {} | cached {} | out {}",
                 format_token_count(inp),
@@ -152,8 +156,9 @@ impl StatusRenderer {
         }
 
         // MCP summary
-        let mcp_total =
-            snapshot.mcp_servers.ready + snapshot.mcp_servers.starting + snapshot.mcp_servers.failed;
+        let mcp_total = snapshot.mcp_servers.ready
+            + snapshot.mcp_servers.starting
+            + snapshot.mcp_servers.failed;
         if mcp_total > 0 && snapshot.mcp_servers.starting == 0 {
             optional_segments.push(format!(
                 "mcp {}/{} ready",
@@ -169,7 +174,10 @@ impl StatusRenderer {
             "loop {}/{}",
             self.meta.iteration, self.meta.max_iterations
         ));
-        priority_segments.push(format!("path {}", shorten_middle(&self.meta.project_path, 12)));
+        priority_segments.push(format!(
+            "path {}",
+            shorten_middle(&self.meta.project_path, 12)
+        ));
         if let Some(tok) = token_segment {
             priority_segments.push(tok);
         }

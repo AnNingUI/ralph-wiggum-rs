@@ -61,13 +61,14 @@ pub fn resolve_model(
 
     // Codex config.toml default
     if uses_codex_config(agent_type)
-        && let Some(configured) = codex_config.model.clone() {
-            return ResolvedModel {
-                execution_model: String::new(),
-                display_model: configured,
-                reasoning_effort: codex_config.reasoning_effort.clone(),
-            };
-        }
+        && let Some(configured) = codex_config.model.clone()
+    {
+        return ResolvedModel {
+            execution_model: String::new(),
+            display_model: configured,
+            reasoning_effort: codex_config.reasoning_effort.clone(),
+        };
+    }
 
     // Fallback: implicit label
     ResolvedModel {
@@ -173,11 +174,7 @@ mod tests {
 
     #[test]
     fn resolve_model_falls_back_to_agent_default() {
-        let resolved = resolve_model(
-            AgentType::ClaudeCode,
-            None,
-            &CodexConfigDefaults::default(),
-        );
+        let resolved = resolve_model(AgentType::ClaudeCode, None, &CodexConfigDefaults::default());
         // Since default_model() returns None, it falls back to implicit label
         assert_eq!(resolved.execution_model, "");
         assert_eq!(resolved.display_model, "default");

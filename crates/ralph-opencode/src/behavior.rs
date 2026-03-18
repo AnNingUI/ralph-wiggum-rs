@@ -8,11 +8,7 @@ pub fn opencode_command() -> &'static str {
     }
 }
 
-pub fn build_opencode_args(
-    prompt: &str,
-    model: &str,
-    options: &AgentOptions,
-) -> Vec<String> {
+pub fn build_opencode_args(prompt: &str, model: &str, options: &AgentOptions) -> Vec<String> {
     let mut args = vec!["run".to_string()];
 
     // Session management

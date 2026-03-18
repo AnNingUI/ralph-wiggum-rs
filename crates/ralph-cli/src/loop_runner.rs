@@ -11,11 +11,12 @@ use tokio::time::{Duration, sleep};
 use ralph_core::options::AgentOptions;
 use ralph_core::plugin::{LoopMode, OutputSink, Runner};
 use ralph_core::progress::ProgressTracker;
-use ralph_core::{AgentEvent, render::RenderLine};
 use ralph_core::state::{
     IterationHistory, RalphState, clear_state, load_context, load_history, load_prev_ai_response,
     save_history, save_prev_ai_response, save_state,
 };
+use ralph_core::types::AgentType;
+use ralph_core::{AgentEvent, render::RenderLine};
 use ralph_core::{check_terminal_promise, inject_prev_ai_context, tasks_markdown_all_complete};
 
 use crate::config::ResolvedModel;
@@ -56,7 +57,8 @@ pub async fn run_iteration(
     }
 
     if let Some(promise) = &state.promise {
-        full_prompt = format!("{full_prompt}\n\nOutput <promise>{promise}</promise> when complete.");
+        full_prompt =
+            format!("{full_prompt}\n\nOutput <promise>{promise}</promise> when complete.");
     }
 
     if let Some(tasks_file) = &state.tasks_file {
@@ -123,9 +125,10 @@ pub async fn run_iteration(
     let mut completed = false;
 
     if let Some(promise) = &state.promise
-        && check_terminal_promise(&completion_output, promise) {
-            completed = true;
-        }
+        && check_terminal_promise(&completion_output, promise)
+    {
+        completed = true;
+    }
 
     if let Some(tasks_file) = &state.tasks_file {
         let tasks_path = std::path::Path::new(tasks_file);
@@ -135,9 +138,10 @@ pub async fn run_iteration(
             params.project_dir.join(tasks_path)
         };
         if let Ok(tasks_content) = std::fs::read_to_string(&resolved_path)
-            && tasks_markdown_all_complete(&tasks_content) {
-                completed = true;
-            }
+            && tasks_markdown_all_complete(&tasks_content)
+        {
+            completed = true;
+        }
     }
 
     let loop_feedback = params.runner.loop_feedback(&completion_output);
@@ -172,6 +176,7 @@ pub async fn run_loop(
     create_runner: &mut dyn FnMut() -> Result<Box<dyn Runner>>,
     options: &AgentOptions,
     model: &ResolvedModel,
+    agent_type: AgentType,
     agent_name: &str,
     sink: &mut dyn OutputSink,
     project_dir: &Path,
@@ -186,19 +191,20 @@ pub async fn run_loop(
         emit_iteration_header(sink, state)?;
 
         let mut runner = create_runner()?;
-        let mut progress = ProgressTracker::new()
-            .with_loop_info(state.iteration, state.max_iterations);
+        let mut progress =
+            ProgressTracker::new().with_loop_info(state.iteration, state.max_iterations);
         let loop_event = AgentEvent::LoopIterationAdvanced {
             iteration: state.iteration,
         };
         progress.observe(&loop_event);
         sink.on_event(&loop_event, progress.snapshot())?;
 
+        let iteration_options = options_for_iteration(state, options, agent_type);
         let result = run_iteration(
             state,
             IterationParams {
                 runner: runner.as_mut(),
-                options,
+                options: &iteration_options,
                 model,
                 agent_name,
                 sink,
@@ -225,6 +231,8 @@ pub async fn run_loop(
         if result.execution.exit_code != 0 {
             errors.push(format!("Exit code: {}", result.execution.exit_code));
         }
+
+        persist_one_session_id(state, agent_type, result.execution.session_id.as_deref());
 
         let record = IterationHistory {
             iteration: state.iteration,
@@ -263,9 +271,7 @@ pub async fn run_loop(
 
         // For internal loop mode, the agent handles its own looping
         if loop_mode == LoopMode::Internal {
-            sink.render_line(&RenderLine::status(
-                "Agent loop ended without completion.",
-            ))?;
+            sink.render_line(&RenderLine::status("Agent loop ended without completion."))?;
             clear_state()?;
             return Ok(LoopOutcome {
                 completed: false,
@@ -276,10 +282,10 @@ pub async fn run_loop(
 
         // Rotate agent if configured
         if let Some(rotation) = &state.rotation
-            && !rotation.is_empty() {
-                state.rotation_index =
-                    Some((state.rotation_index.unwrap_or(0) + 1) % rotation.len());
-            }
+            && !rotation.is_empty()
+        {
+            state.rotation_index = Some((state.rotation_index.unwrap_or(0) + 1) % rotation.len());
+        }
 
         state.iteration += 1;
         save_state(state)?;
@@ -329,6 +335,54 @@ pub async fn run_loop(
 
 fn should_continue(iteration: u32, max_iterations: u32) -> bool {
     max_iterations == 0 || iteration <= max_iterations
+}
+
+fn options_for_iteration(
+    state: &RalphState,
+    options: &AgentOptions,
+    agent_type: AgentType,
+) -> AgentOptions {
+    let mut next = options.clone();
+
+    if !state.one_session || state.iteration <= 1 {
+        return next;
+    }
+
+    match agent_type {
+        AgentType::Codex => {
+            next.codex.fork_last = false;
+            next.codex.fork_session = None;
+            next.codex.resume_last = state.codex_resume_session.is_none();
+            next.codex.resume_session = state.codex_resume_session.clone();
+        }
+        AgentType::ClaudeCode => {
+            next.claude.fork_session = false;
+            next.claude.session_id = None;
+            next.claude.resume = state.claude_session_id.clone();
+            next.claude.continue_session = state.claude_session_id.is_none();
+        }
+        AgentType::Opencode => {
+            next.opencode.fork_session = false;
+            next.opencode.session_id = state.opencode_session_id.clone();
+            next.opencode.continue_session = state.opencode_session_id.is_none();
+        }
+        AgentType::Copilot => {}
+    }
+
+    next
+}
+
+fn persist_one_session_id(state: &mut RalphState, agent_type: AgentType, session_id: Option<&str>) {
+    let Some(session_id) = session_id.filter(|id| !id.trim().is_empty()) else {
+        return;
+    };
+
+    match agent_type {
+        AgentType::Codex => state.codex_resume_session = Some(session_id.to_string()),
+        AgentType::ClaudeCode => state.claude_session_id = Some(session_id.to_string()),
+        AgentType::Opencode => state.opencode_session_id = Some(session_id.to_string()),
+        AgentType::Copilot => {}
+    }
 }
 
 fn max_iterations_label(max: u32) -> String {

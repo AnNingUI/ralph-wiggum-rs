@@ -23,11 +23,11 @@ pub fn run_status() -> Result<()> {
         return Ok(());
     }
 
-    println!("  Iteration:      {}/{}", state.iteration, state.max_iterations);
     println!(
-        "  Prompt:         {}",
-        truncate_string(&state.prompt, 60)
+        "  Iteration:      {}/{}",
+        state.iteration, state.max_iterations
     );
+    println!("  Prompt:         {}", truncate_string(&state.prompt, 60));
 
     if let Some(promise) = &state.promise {
         println!("  Promise:        {}", truncate_string(promise, 60));
@@ -43,6 +43,12 @@ pub fn run_status() -> Result<()> {
 
     if let Some(session) = &state.codex_resume_session {
         println!("  Codex session:  {}", session);
+    }
+    if let Some(session) = &state.claude_session_id {
+        println!("  Claude session: {}", session);
+    }
+    if let Some(session) = &state.opencode_session_id {
+        println!("  OpenCode session: {}", session);
     }
 
     println!();

@@ -5,7 +5,7 @@
 //! without blocking.
 
 use std::time::Duration;
-use tokio::time::{interval, MissedTickBehavior};
+use tokio::time::{MissedTickBehavior, interval};
 
 /// Configuration for the event loop.
 #[derive(Debug, Clone)]

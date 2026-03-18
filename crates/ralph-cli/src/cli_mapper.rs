@@ -6,7 +6,9 @@
 
 use std::path::PathBuf;
 
-use ralph_core::options::{AgentOptions, ClaudeOptions, CodexOptions, CommonOptions, OpencodeOptions};
+use ralph_core::options::{
+    AgentOptions, ClaudeOptions, CodexOptions, CommonOptions, OpencodeOptions,
+};
 use ralph_core::types::{ApprovalPolicy, ClaudeLoopMode, ClaudeOutputFormat, SandboxMode};
 
 /// Builder for constructing AgentOptions from CLI-level values.
@@ -185,9 +187,6 @@ mod tests {
         );
         assert!(options.codex.resume_last);
         assert!(options.claude.print_mode);
-        assert_eq!(
-            options.claude.loop_mode,
-            Some(ClaudeLoopMode::RalphPlugin)
-        );
+        assert_eq!(options.claude.loop_mode, Some(ClaudeLoopMode::RalphPlugin));
     }
 }

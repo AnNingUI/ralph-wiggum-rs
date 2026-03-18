@@ -18,7 +18,7 @@ pub struct OpencodeRunner {
 impl OpencodeRunner {
     pub fn new(show_status: bool) -> Self {
         Self {
-            parser: OpencodeEventParser,
+            parser: OpencodeEventParser::default(),
             has_status_renderer: show_status,
         }
     }
@@ -52,12 +52,7 @@ impl Runner for OpencodeRunner {
         prepend_opencode_file_edit_prompt(prompt)
     }
 
-    fn build_args(
-        &self,
-        prompt: &str,
-        model: &str,
-        options: &AgentOptions,
-    ) -> Vec<String> {
+    fn build_args(&self, prompt: &str, model: &str, options: &AgentOptions) -> Vec<String> {
         // On Windows, prompt is passed via stdin, not as argument
         let prompt_arg = if cfg!(target_os = "windows") {
             ""
@@ -67,10 +62,7 @@ impl Runner for OpencodeRunner {
         build_opencode_args(prompt_arg, model, options)
     }
 
-    fn build_env(
-        &self,
-        _options: &AgentOptions,
-    ) -> HashMap<String, String> {
+    fn build_env(&self, _options: &AgentOptions) -> HashMap<String, String> {
         HashMap::new()
     }
 

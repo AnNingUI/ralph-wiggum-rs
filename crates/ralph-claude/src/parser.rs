@@ -1,4 +1,4 @@
-//! Claude stream-json → AgentEvent parser.
+//! Claude stream-json to AgentEvent parser.
 //! Converts low-level StreamUpdate into unified AgentEvent + RenderLine.
 
 use ralph_core::{AgentEvent, RenderLine, Role, ToolSource, ToolStatus};
@@ -9,7 +9,8 @@ use crate::stream::{ClaudeStreamParser, StreamUpdate};
 pub struct ClaudeEventParser {
     stream: ClaudeStreamParser,
     replay_user_messages: bool,
-    /// Track pending tool_use calls (id → name) for tool_result matching.
+    last_session_id: Option<String>,
+    /// Track pending tool_use calls (id -> name) for tool_result matching.
     pending_tools: std::collections::HashMap<String, String>,
 }
 
@@ -25,6 +26,7 @@ impl ClaudeEventParser {
         Self {
             stream: ClaudeStreamParser::default(),
             replay_user_messages,
+            last_session_id: None,
             pending_tools: std::collections::HashMap::new(),
         }
     }
@@ -67,6 +69,18 @@ impl ClaudeEventParser {
             .map(|r| r.eq_ignore_ascii_case("assistant"))
             .unwrap_or(true);
 
+        if let Some(session_id) = update
+            .session_id
+            .as_ref()
+            .filter(|id| !id.trim().is_empty())
+            && self.last_session_id.as_deref() != Some(session_id.as_str())
+        {
+            self.last_session_id = Some(session_id.clone());
+            events.push(AgentEvent::SessionStarted {
+                session_id: Some(session_id.clone()),
+            });
+        }
+
         // Token update
         if let Some(usage) = &update.usage {
             events.push(AgentEvent::TokenUpdate {
@@ -76,7 +90,19 @@ impl ClaudeEventParser {
             });
         }
 
-        // Tool use detection → ToolCallBegin
+        // Thinking/reasoning content
+        if let Some(thinking) = &update.thinking_delta
+            && !thinking.trim().is_empty()
+        {
+            events.push(AgentEvent::ReasoningDelta {
+                text: thinking.clone(),
+            });
+        }
+        for line in &update.thinking_lines {
+            lines.push(RenderLine::reasoning(format!("> {line}")));
+        }
+
+        // Tool use detection -> ToolCallBegin
         if let Some(tool_name) = &update.tool_name {
             let call_id = update
                 .tool_id
@@ -95,22 +121,22 @@ impl ClaudeEventParser {
             lines.push(RenderLine::tool_call(format!("[tool:{tool_name}]")));
         }
 
-        // Tool result detection → ToolCallEnd
-        // Check if this is a tool_result event by looking at the raw JSON structure
+        // Tool result detection -> ToolCallEnd
         if update.tool_name.is_none()
             && let Some(tool_id) = &update.tool_id
-                && let Some(tool_name) = self.pending_tools.remove(tool_id) {
-                    events.push(AgentEvent::ToolCallEnd {
-                        call_id: tool_id.clone(),
-                        tool: tool_name.clone(),
-                        status: ToolStatus::Completed,
-                        duration_ms: None,
-                        exit_code: None,
-                    });
-                    lines.push(RenderLine::tool_output(format!(
-                        "[tool:{tool_name}:completed]"
-                    )));
-                }
+            && let Some(tool_name) = self.pending_tools.remove(tool_id)
+        {
+            events.push(AgentEvent::ToolCallEnd {
+                call_id: tool_id.clone(),
+                tool: tool_name.clone(),
+                status: ToolStatus::Completed,
+                duration_ms: None,
+                exit_code: None,
+            });
+            lines.push(RenderLine::tool_output(format!(
+                "[tool:{tool_name}:completed]"
+            )));
+        }
 
         // Text handling
         if is_assistant {
@@ -122,23 +148,21 @@ impl ClaudeEventParser {
                 output_buffer_text = Some(delta.clone());
             }
             if let Some(full_text) = &update.full_text
-                && !full_text.trim().is_empty() {
-                    latest_response = Some(full_text.clone());
-                }
+                && !full_text.trim().is_empty()
+            {
+                latest_response = Some(full_text.clone());
+            }
             for emitted in &update.emitted_lines {
                 lines.push(RenderLine::assistant(emitted.as_str()));
             }
-        } else {
+        } else if self.replay_user_messages {
             // Non-assistant text
-            let should_emit = self.replay_user_messages;
-            if should_emit {
-                for emitted in &update.emitted_lines {
-                    lines.push(RenderLine::status(format!(
-                        "[{}] {}",
-                        update.role.as_deref().unwrap_or("system"),
-                        emitted
-                    )));
-                }
+            for emitted in &update.emitted_lines {
+                lines.push(RenderLine::status(format!(
+                    "[{}] {}",
+                    update.role.as_deref().unwrap_or("system"),
+                    emitted
+                )));
             }
         }
 
@@ -166,7 +190,10 @@ mod tests {
 
         assert!(result.events.iter().any(|e| matches!(
             e,
-            AgentEvent::TextDelta { role: Role::Assistant, .. }
+            AgentEvent::TextDelta {
+                role: Role::Assistant,
+                ..
+            }
         )));
         assert_eq!(result.lines.len(), 1);
         assert_eq!(result.output_buffer_text, Some("Hello\n".to_string()));
@@ -183,7 +210,11 @@ mod tests {
 
         assert!(result.events.iter().any(|e| matches!(
             e,
-            AgentEvent::ToolCallBegin { tool, source: ToolSource::Agent, .. } if tool == "Edit"
+            AgentEvent::ToolCallBegin {
+                tool,
+                source: ToolSource::Agent,
+                ..
+            } if tool == "Edit"
         )));
     }
 
@@ -198,7 +229,26 @@ mod tests {
 
         assert!(result.events.iter().any(|e| matches!(
             e,
-            AgentEvent::TokenUpdate { input: Some(500), output: Some(100), .. }
+            AgentEvent::TokenUpdate {
+                input: Some(500),
+                output: Some(100),
+                ..
+            }
+        )));
+    }
+
+    #[test]
+    fn emits_session_started_event() {
+        let mut parser = ClaudeEventParser::new(false);
+        let result = parser
+            .parse_line(r#"{"type":"message_start","message":{"session_id":"sid-123"}}"#)
+            .unwrap();
+
+        assert!(result.events.iter().any(|e| matches!(
+            e,
+            AgentEvent::SessionStarted {
+                session_id: Some(id)
+            } if id == "sid-123"
         )));
     }
 

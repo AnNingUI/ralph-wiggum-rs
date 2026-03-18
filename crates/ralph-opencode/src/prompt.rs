@@ -1,23 +1,18 @@
 /// OpenCode-specific prompt enhancements.
 ///
 /// Provides system prompts and prompt transformations for OpenCode agent.
-pub const OPENCODE_SYSTEM_PROMPT: &str =
-    "You are an AI coding assistant powered by OpenCode. \
+pub const OPENCODE_SYSTEM_PROMPT: &str = "You are an AI coding assistant powered by OpenCode. \
      Use the available tools to read, write, and modify files. \
      When editing files, prefer using the edit tool over shell commands. \
      Always verify your changes and provide clear explanations.";
 
-pub const OPENCODE_FILE_EDIT_PROMPT: &str =
-    "For file operations, use the built-in file tools directly. \
+pub const OPENCODE_FILE_EDIT_PROMPT: &str = "For file operations, use the built-in file tools directly. \
      Do not use shell redirection or heredoc to write files. \
      Use the edit tool for precise modifications.";
 
 /// Prepend OpenCode system prompt to user prompt.
 pub fn prepend_opencode_system_prompt(prompt: &str) -> String {
-    format!(
-        "<system>{}</system>\n\n{}",
-        OPENCODE_SYSTEM_PROMPT, prompt
-    )
+    format!("<system>{}</system>\n\n{}", OPENCODE_SYSTEM_PROMPT, prompt)
 }
 
 /// Prepend file edit guidance to user prompt.

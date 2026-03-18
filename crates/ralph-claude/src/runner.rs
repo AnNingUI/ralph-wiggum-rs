@@ -91,19 +91,11 @@ impl Runner for ClaudeRunner {
         matches!(self.output_format, ClaudeOutputFormat::StreamJson)
     }
 
-    fn build_args(
-        &self,
-        prompt: &str,
-        model: &str,
-        options: &AgentOptions,
-    ) -> Vec<String> {
+    fn build_args(&self, prompt: &str, model: &str, options: &AgentOptions) -> Vec<String> {
         build_claude_args(prompt, model, options)
     }
 
-    fn build_env(
-        &self,
-        _options: &AgentOptions,
-    ) -> HashMap<String, String> {
+    fn build_env(&self, _options: &AgentOptions) -> HashMap<String, String> {
         HashMap::new()
     }
 

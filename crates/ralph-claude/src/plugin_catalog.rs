@@ -101,17 +101,13 @@ impl ClaudeCodeWorkspace {
                     .as_deref()
                     .and_then(|s| resolve_marketplace_source(&self.root, s))
                 {
-                    sources.push(Box::new(DirectoryPluginSource {
-                        root: source_path,
-                    }));
+                    sources.push(Box::new(DirectoryPluginSource { root: source_path }));
                 }
             }
         }
 
         if let Some(plugins_root) = plugins_root(&self.root) {
-            sources.push(Box::new(DirectoryPluginSource {
-                root: plugins_root,
-            }));
+            sources.push(Box::new(DirectoryPluginSource { root: plugins_root }));
         }
 
         PluginCatalog { sources }

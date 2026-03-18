@@ -229,10 +229,12 @@ impl RalphTui {
         let transcript_follow = self.transcript_follow;
         let (loop_iteration, loop_max) = progress
             .as_ref()
-            .and_then(|snapshot| match (snapshot.loop_iteration, snapshot.loop_max) {
-                (Some(iteration), Some(max)) => Some((iteration, max)),
-                _ => None,
-            })
+            .and_then(
+                |snapshot| match (snapshot.loop_iteration, snapshot.loop_max) {
+                    (Some(iteration), Some(max)) => Some((iteration, max)),
+                    _ => None,
+                },
+            )
             .unwrap_or((meta.iteration, meta.max_iterations));
 
         self.terminal.draw(|frame| {
@@ -314,10 +316,7 @@ impl RalphTui {
             let gauge = Gauge::default()
                 .gauge_style(Style::default().fg(Color::Cyan))
                 .ratio(ratio)
-                .label(format!(
-                    "iteration {}/{}",
-                    loop_iteration, loop_max
-                ));
+                .label(format!("iteration {}/{}", loop_iteration, loop_max));
             frame.render_widget(gauge, header_rows[3]);
 
             // Transcript panel
@@ -479,9 +478,7 @@ fn kind_visual(kind: &RenderKind) -> (&'static str, Style, Style) {
         ),
         RenderKind::Error => (
             "error",
-            Style::default()
-                .fg(Color::Red)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
             Style::default().fg(Color::Red),
         ),
         RenderKind::Mcp => (

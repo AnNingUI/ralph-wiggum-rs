@@ -60,17 +60,9 @@ pub trait Runner: Send {
         prompt.to_string()
     }
 
-    fn build_args(
-        &self,
-        prompt: &str,
-        model: &str,
-        options: &AgentOptions,
-    ) -> Vec<String>;
+    fn build_args(&self, prompt: &str, model: &str, options: &AgentOptions) -> Vec<String>;
 
-    fn build_env(
-        &self,
-        options: &AgentOptions,
-    ) -> std::collections::HashMap<String, String> {
+    fn build_env(&self, options: &AgentOptions) -> std::collections::HashMap<String, String> {
         let _ = options;
         std::collections::HashMap::new()
     }
@@ -117,9 +109,14 @@ pub struct RunContext<'a> {
 impl RunContext<'_> {
     /// Emit an event: updates progress tracker and routes to output sink.
     pub fn emit(&mut self, event: crate::event::AgentEvent) -> Result<()> {
+        if let crate::event::AgentEvent::SessionStarted {
+            session_id: Some(session_id),
+        } = &event
+        {
+            self.output.session_id = Some(session_id.clone());
+        }
         self.progress.observe(&event);
-        self.sink
-            .on_event(&event, self.progress.snapshot())?;
+        self.sink.on_event(&event, self.progress.snapshot())?;
         Ok(())
     }
 
@@ -136,6 +133,7 @@ pub struct OutputState {
     pub output_buffer: String,
     pub tools_used: std::collections::HashMap<String, u32>,
     pub latest_ai_response: Option<String>,
+    pub session_id: Option<String>,
     pub errors: Vec<String>,
 }
 
@@ -183,8 +181,8 @@ impl OutputSink for PlainOutput {
     }
 
     fn render_line(&mut self, line: &crate::render::RenderLine) -> Result<()> {
-        use colored::Colorize;
         use crate::render::RenderKind;
+        use colored::Colorize;
         match line.kind {
             RenderKind::Assistant => println!("{}", line.text),
             RenderKind::Reasoning => println!("{}", line.text.dimmed()),

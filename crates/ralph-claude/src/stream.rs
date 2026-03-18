@@ -11,7 +11,12 @@ pub struct StreamUpdate {
     pub tool_name: Option<String>,
     pub tool_id: Option<String>,
     pub role: Option<String>,
+    pub session_id: Option<String>,
     pub usage: Option<StreamUsage>,
+    /// Thinking/reasoning delta text from extended thinking content blocks.
+    pub thinking_delta: Option<String>,
+    /// Accumulated thinking lines ready for display.
+    pub thinking_lines: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,6 +30,8 @@ pub struct StreamUsage {
 pub struct ClaudeStreamParser {
     assembled: String,
     pending_line: String,
+    /// Buffer for accumulating thinking delta text until a newline.
+    pending_thinking: String,
 }
 
 impl ClaudeStreamParser {
@@ -52,6 +59,7 @@ impl ClaudeStreamParser {
         let role = extract_role(value);
         let is_assistant = is_assistant_role(role.as_deref());
         update.role = role;
+        update.session_id = extract_session_id(value);
 
         // Extract usage from message events
         if let Some(usage) = extract_usage(value) {
@@ -64,6 +72,25 @@ impl ClaudeStreamParser {
         }
         if let Some(tool_id) = find_tool_id(value) {
             update.tool_id = Some(tool_id);
+        }
+
+        // Handle thinking/reasoning content blocks (extended thinking).
+        // These arrive as content_block_start with type "thinking" and
+        // content_block_delta with delta.type "thinking_delta".
+        if let Some(thinking) = extract_thinking_delta(value) {
+            let lines = self.append_thinking(&thinking);
+            update.thinking_delta = Some(thinking);
+            update.thinking_lines = lines;
+            return update;
+        }
+
+        // Also handle a full thinking block (content_block_start with
+        // pre-populated thinking text, or message.content[].thinking).
+        if let Some(thinking) = extract_full_thinking(value) {
+            let lines = self.append_thinking(&thinking);
+            update.thinking_delta = Some(thinking);
+            update.thinking_lines = lines;
+            return update;
         }
 
         if is_assistant {
@@ -135,6 +162,87 @@ impl ClaudeStreamParser {
             .collect();
         (None, lines)
     }
+
+    /// Accumulate thinking text and emit complete lines.
+    fn append_thinking(&mut self, text: &str) -> Vec<String> {
+        if text.is_empty() {
+            return Vec::new();
+        }
+        self.pending_thinking.push_str(text);
+        let mut lines = Vec::new();
+        while let Some(pos) = self.pending_thinking.find('\n') {
+            let line = self.pending_thinking[..pos].to_string();
+            self.pending_thinking = self.pending_thinking[pos + 1..].to_string();
+            if !line.is_empty() {
+                lines.push(line);
+            }
+        }
+        lines
+    }
+}
+
+/// Extract thinking delta from `content_block_delta` events with
+/// `delta.type == "thinking_delta"`.
+fn extract_thinking_delta(value: &Value) -> Option<String> {
+    let delta = value.get("delta")?;
+    if delta
+        .get("type")
+        .and_then(Value::as_str)
+        .is_some_and(|ty| ty == "thinking_delta")
+    {
+        return delta
+            .get("thinking")
+            .and_then(Value::as_str)
+            .map(String::from);
+    }
+    None
+}
+
+/// Extract full thinking text from a `content_block_start` event whose
+/// `content_block.type == "thinking"`, or from `message.content[]` blocks
+/// of type `"thinking"`.
+fn extract_full_thinking(value: &Value) -> Option<String> {
+    // content_block_start with type "thinking"
+    if let Some(cb) = value.get("content_block") {
+        if cb
+            .get("type")
+            .and_then(Value::as_str)
+            .is_some_and(|ty| ty == "thinking")
+        {
+            if let Some(text) = cb.get("thinking").and_then(Value::as_str) {
+                if !text.is_empty() {
+                    return Some(text.to_string());
+                }
+            }
+            // Block started but no text yet — return None so we wait for deltas
+            return None;
+        }
+    }
+
+    // message.content[] blocks of type "thinking"
+    if let Some(content) = value
+        .get("message")
+        .and_then(|m| m.get("content"))
+        .and_then(Value::as_array)
+    {
+        let mut parts = Vec::new();
+        for item in content {
+            if item
+                .get("type")
+                .and_then(Value::as_str)
+                .is_some_and(|ty| ty == "thinking")
+            {
+                if let Some(text) = item.get("thinking").and_then(Value::as_str) {
+                    parts.push(text.to_string());
+                }
+            }
+        }
+        if !parts.is_empty() {
+            return Some(parts.join(""));
+        }
+    }
+
+    None
 }
 
 fn extract_text_delta(value: &Value) -> Option<String> {
@@ -146,18 +254,20 @@ fn extract_text_delta(value: &Value) -> Option<String> {
             .get("type")
             .and_then(Value::as_str)
             .is_some_and(|ty| ty == "text_delta")
-            && let Some(text) = delta.get("text").and_then(Value::as_str) {
-                return Some(text.to_string());
-            }
+            && let Some(text) = delta.get("text").and_then(Value::as_str)
+        {
+            return Some(text.to_string());
+        }
     }
 
     if value
         .get("type")
         .and_then(Value::as_str)
         .is_some_and(|ty| ty == "text_delta")
-        && let Some(text) = value.get("text").and_then(Value::as_str) {
-            return Some(text.to_string());
-        }
+        && let Some(text) = value.get("text").and_then(Value::as_str)
+    {
+        return Some(text.to_string());
+    }
 
     None
 }
@@ -168,9 +278,10 @@ fn extract_full_text(value: &Value) -> Option<String> {
     }
 
     if let Some(message) = value.get("message")
-        && let Some(text) = collect_text_blocks(message.get("content")) {
-            return Some(text);
-        }
+        && let Some(text) = collect_text_blocks(message.get("content"))
+    {
+        return Some(text);
+    }
 
     collect_text_blocks(value.get("content"))
 }
@@ -182,15 +293,40 @@ fn extract_usage(value: &Value) -> Option<StreamUsage> {
 
     let input = usage.get("input_tokens").and_then(Value::as_i64)?;
     let output = usage.get("output_tokens").and_then(Value::as_i64)?;
-    let cache_read = usage
-        .get("cache_read_input_tokens")
-        .and_then(Value::as_i64);
+    let cache_read = usage.get("cache_read_input_tokens").and_then(Value::as_i64);
 
     Some(StreamUsage {
         input_tokens: input,
         output_tokens: output,
         cache_read_input_tokens: cache_read,
     })
+}
+
+fn extract_session_id(value: &Value) -> Option<String> {
+    match value {
+        Value::Object(map) => {
+            if let Some(session_id) = map.get("session_id").and_then(Value::as_str) {
+                return Some(session_id.to_string());
+            }
+            if let Some(session_id) = map.get("sessionId").and_then(Value::as_str) {
+                return Some(session_id.to_string());
+            }
+            for item in map.values() {
+                if let Some(session_id) = extract_session_id(item) {
+                    return Some(session_id);
+                }
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                if let Some(session_id) = extract_session_id(item) {
+                    return Some(session_id);
+                }
+            }
+        }
+        _ => {}
+    }
+    None
 }
 
 fn split_nonempty_lines(text: &str) -> Vec<String> {
@@ -205,9 +341,10 @@ fn extract_role(value: &Value) -> Option<String> {
         return Some(role.to_string());
     }
     if let Some(message) = value.get("message")
-        && let Some(role) = message.get("role").and_then(Value::as_str) {
-            return Some(role.to_string());
-        }
+        && let Some(role) = message.get("role").and_then(Value::as_str)
+    {
+        return Some(role.to_string());
+    }
     None
 }
 
@@ -299,9 +436,9 @@ fn find_tool_id(value: &Value) -> Option<String> {
                     .get("id")
                     .or_else(|| map.get("tool_use_id"))
                     .and_then(Value::as_str)
-                {
-                    return Some(id.to_string());
-                }
+            {
+                return Some(id.to_string());
+            }
             for v in map.values() {
                 if let Some(id) = find_tool_id(v) {
                     return Some(id);
@@ -390,5 +527,14 @@ mod tests {
         let usage = update.usage.unwrap();
         assert_eq!(usage.input_tokens, 500);
         assert_eq!(usage.output_tokens, 100);
+    }
+
+    #[test]
+    fn extracts_session_id() {
+        let mut parser = ClaudeStreamParser::default();
+        let update = parser
+            .process_line(r#"{"type":"message_start","message":{"session_id":"sid-123"}}"#)
+            .unwrap();
+        assert_eq!(update.session_id, Some("sid-123".to_string()));
     }
 }

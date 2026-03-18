@@ -1,9 +1,7 @@
 use anyhow::Result;
 
 use ralph_core::options::AgentOptions;
-use ralph_core::plugin::{
-    AgentPlugin, IterationPlan, LoopMode, Notice, Runner,
-};
+use ralph_core::plugin::{AgentPlugin, IterationPlan, LoopMode, Notice, Runner};
 use ralph_core::types::AgentType;
 
 use crate::runner::CodexRunner;

@@ -50,19 +50,11 @@ impl Runner for CodexRunner {
         prepend_codex_file_edit_prompt(prompt)
     }
 
-    fn build_args(
-        &self,
-        prompt: &str,
-        model: &str,
-        options: &AgentOptions,
-    ) -> Vec<String> {
+    fn build_args(&self, prompt: &str, model: &str, options: &AgentOptions) -> Vec<String> {
         build_codex_args(prompt, model, options)
     }
 
-    fn build_env(
-        &self,
-        _options: &AgentOptions,
-    ) -> HashMap<String, String> {
+    fn build_env(&self, _options: &AgentOptions) -> HashMap<String, String> {
         HashMap::new()
     }
 

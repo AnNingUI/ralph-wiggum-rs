@@ -73,17 +73,13 @@ impl ClaudePluginSummaryProvider for FilesystemPluginSummaryProvider {
         let missing_hook_files = components
             .hook_files
             .iter()
-            .filter(|file| {
-                !file.exists && file.source == ClaudePluginComponentPathSource::Manifest
-            })
+            .filter(|file| !file.exists && file.source == ClaudePluginComponentPathSource::Manifest)
             .map(|file| file.path.clone())
             .collect();
         let missing_mcp_files = components
             .mcp_files
             .iter()
-            .filter(|file| {
-                !file.exists && file.source == ClaudePluginComponentPathSource::Manifest
-            })
+            .filter(|file| !file.exists && file.source == ClaudePluginComponentPathSource::Manifest)
             .map(|file| file.path.clone())
             .collect();
 

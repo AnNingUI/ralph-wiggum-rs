@@ -387,15 +387,16 @@ fn inspect_mcp_servers(plugin_dir: &Path) -> Vec<ClaudePluginMcpServer> {
         return Vec::new();
     };
 
-    let Some(mcp_obj) = manifest_value.get("mcp").and_then(|value| value.as_object()) else {
+    let Some(mcp_obj) = manifest_value
+        .get("mcp")
+        .and_then(|value| value.as_object())
+    else {
         return Vec::new();
     };
 
     mcp_obj
         .keys()
-        .map(|name| ClaudePluginMcpServer {
-            name: name.clone(),
-        })
+        .map(|name| ClaudePluginMcpServer { name: name.clone() })
         .collect()
 }
 

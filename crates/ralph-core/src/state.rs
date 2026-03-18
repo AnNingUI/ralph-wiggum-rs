@@ -21,6 +21,10 @@ pub struct RalphState {
     pub one_session: bool,
     #[serde(default)]
     pub codex_resume_session: Option<String>,
+    #[serde(default)]
+    pub claude_session_id: Option<String>,
+    #[serde(default)]
+    pub opencode_session_id: Option<String>,
     pub rotation: Option<Vec<AgentModelPair>>,
     pub rotation_index: Option<usize>,
     pub promise: Option<String>,
@@ -37,6 +41,8 @@ impl RalphState {
             started_at: Utc::now(),
             one_session: false,
             codex_resume_session: None,
+            claude_session_id: None,
+            opencode_session_id: None,
             rotation: None,
             rotation_index: None,
             promise: None,

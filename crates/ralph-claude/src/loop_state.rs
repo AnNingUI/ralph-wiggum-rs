@@ -100,9 +100,9 @@ pub fn parse_event(line: &str) -> Option<ClaudeLoopEvent> {
     }
 
     if let Some(promise) = extract_promise(trimmed) {
-        return Some(ClaudeLoopEvent::Outcome(ClaudeLoopOutcome::PromiseDetected(
-            promise,
-        )));
+        return Some(ClaudeLoopEvent::Outcome(
+            ClaudeLoopOutcome::PromiseDetected(promise),
+        ));
     }
     if let Some(max) = extract_max_iterations(trimmed) {
         return Some(ClaudeLoopEvent::Outcome(ClaudeLoopOutcome::MaxIterations(
@@ -143,10 +143,7 @@ fn extract_iteration_marker(line: &str) -> Option<u32> {
     let needle = "Ralph iteration";
     let index = line.find(needle)?;
     let tail = line[index + needle.len()..].trim_start();
-    let digits: String = tail
-        .chars()
-        .take_while(|ch| ch.is_ascii_digit())
-        .collect();
+    let digits: String = tail.chars().take_while(|ch| ch.is_ascii_digit()).collect();
     if digits.is_empty() {
         return None;
     }

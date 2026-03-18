@@ -93,9 +93,10 @@ pub fn parse_event(line: &str) -> Option<OpencodeLoopEvent> {
         && let Some(num_str) = trimmed
             .strip_prefix("🔄 Ralph iteration ")
             .and_then(|rest| rest.split_whitespace().next())
-            && let Ok(iteration) = num_str.parse::<u32>() {
-                return Some(OpencodeLoopEvent::IterationAdvanced(iteration));
-            }
+        && let Ok(iteration) = num_str.parse::<u32>()
+    {
+        return Some(OpencodeLoopEvent::IterationAdvanced(iteration));
+    }
 
     // Promise detected
     if trimmed.starts_with("Ralph loop: Completion promise detected: ") {
@@ -113,11 +114,12 @@ pub fn parse_event(line: &str) -> Option<OpencodeLoopEvent> {
         && let Some(num_str) = trimmed
             .strip_prefix("Ralph loop: Max iterations (")
             .and_then(|rest| rest.split(')').next())
-            && let Ok(max) = num_str.parse::<u32>() {
-                return Some(OpencodeLoopEvent::Outcome(
-                    OpencodeLoopOutcome::MaxIterations(max),
-                ));
-            }
+        && let Ok(max) = num_str.parse::<u32>()
+    {
+        return Some(OpencodeLoopEvent::Outcome(
+            OpencodeLoopOutcome::MaxIterations(max),
+        ));
+    }
 
     None
 }

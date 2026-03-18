@@ -22,6 +22,7 @@ pub struct ExecutionResult {
     pub output_buffer: String,
     pub tools_used: HashMap<String, u32>,
     pub latest_ai_response: Option<String>,
+    pub session_id: Option<String>,
     pub exit_code: i32,
     pub interrupted: bool,
 }
@@ -132,6 +133,7 @@ pub async fn run_agent_once(
                 output_buffer: output.output_buffer,
                 tools_used: output.tools_used,
                 latest_ai_response: output.latest_ai_response,
+                session_id: output.session_id,
                 exit_code: -1,
                 interrupted: true,
             });
@@ -156,6 +158,7 @@ pub async fn run_agent_once(
                     output_buffer: output.output_buffer,
                     tools_used: output.tools_used,
                     latest_ai_response: output.latest_ai_response,
+                    session_id: output.session_id,
                     exit_code: -1,
                     interrupted: true,
                 });
@@ -168,6 +171,7 @@ pub async fn run_agent_once(
                         output_buffer: output.output_buffer,
                         tools_used: output.tools_used,
                         latest_ai_response: output.latest_ai_response,
+                        session_id: output.session_id,
                         exit_code: -1,
                         interrupted: true,
                     });
@@ -270,13 +274,18 @@ pub async fn run_agent_once(
         None
     };
 
-    let latest_ai_response =
-        runner.resolve_latest_response(exit_code, &output.output_buffer, handler_latest, captured_latest);
+    let latest_ai_response = runner.resolve_latest_response(
+        exit_code,
+        &output.output_buffer,
+        handler_latest,
+        captured_latest,
+    );
 
     Ok(ExecutionResult {
         output_buffer: output.output_buffer,
         tools_used: output.tools_used,
         latest_ai_response,
+        session_id: output.session_id,
         exit_code,
         interrupted: false,
     })

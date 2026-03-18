@@ -12,6 +12,10 @@ pub struct StreamUpdate {
     pub tool_id: Option<String>,
     pub role: Option<String>,
     pub usage: Option<StreamUsage>,
+    /// Thinking/reasoning delta text.
+    pub thinking_delta: Option<String>,
+    /// Accumulated thinking lines ready for display.
+    pub thinking_lines: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,6 +29,7 @@ pub struct StreamUsage {
 pub struct OpencodeStreamParser {
     assembled: String,
     pending_line: String,
+    pending_thinking: String,
 }
 
 impl OpencodeStreamParser {
@@ -64,6 +69,21 @@ impl OpencodeStreamParser {
         }
         if let Some(tool_id) = find_tool_id(value) {
             update.tool_id = Some(tool_id);
+        }
+
+        // Handle thinking/reasoning content blocks
+        if let Some(thinking) = extract_thinking_delta(value) {
+            let lines = self.append_thinking(&thinking);
+            update.thinking_delta = Some(thinking);
+            update.thinking_lines = lines;
+            return update;
+        }
+
+        if let Some(thinking) = extract_full_thinking(value) {
+            let lines = self.append_thinking(&thinking);
+            update.thinking_delta = Some(thinking);
+            update.thinking_lines = lines;
+            return update;
         }
 
         if is_assistant {
@@ -117,6 +137,80 @@ impl OpencodeStreamParser {
         let lines = full_text.lines().map(|s| s.to_string()).collect();
         (delta, lines)
     }
+
+    fn append_thinking(&mut self, text: &str) -> Vec<String> {
+        if text.is_empty() {
+            return Vec::new();
+        }
+        self.pending_thinking.push_str(text);
+        let mut lines = Vec::new();
+        while let Some(pos) = self.pending_thinking.find('\n') {
+            let line = self.pending_thinking[..pos].to_string();
+            self.pending_thinking = self.pending_thinking[pos + 1..].to_string();
+            if !line.is_empty() {
+                lines.push(line);
+            }
+        }
+        lines
+    }
+}
+
+fn extract_thinking_delta(value: &Value) -> Option<String> {
+    let delta = value.get("delta")?;
+    if delta
+        .get("type")
+        .and_then(Value::as_str)
+        .is_some_and(|ty| ty == "thinking_delta")
+    {
+        return delta
+            .get("thinking")
+            .and_then(Value::as_str)
+            .map(String::from);
+    }
+    None
+}
+
+fn extract_full_thinking(value: &Value) -> Option<String> {
+    // content_block_start with type "thinking"
+    if let Some(cb) = value.get("content_block") {
+        if cb
+            .get("type")
+            .and_then(Value::as_str)
+            .is_some_and(|ty| ty == "thinking")
+        {
+            if let Some(text) = cb.get("thinking").and_then(Value::as_str) {
+                if !text.is_empty() {
+                    return Some(text.to_string());
+                }
+            }
+            return None;
+        }
+    }
+
+    // message.content[] blocks of type "thinking"
+    if let Some(content) = value
+        .get("message")
+        .and_then(|m| m.get("content"))
+        .and_then(Value::as_array)
+    {
+        let mut parts = Vec::new();
+        for item in content {
+            if item
+                .get("type")
+                .and_then(Value::as_str)
+                .is_some_and(|ty| ty == "thinking")
+            {
+                if let Some(text) = item.get("thinking").and_then(Value::as_str) {
+                    parts.push(text.to_string());
+                }
+            }
+        }
+        if !parts.is_empty() {
+            return Some(parts.join(""));
+        }
+    }
+
+    None
 }
 
 fn extract_role(value: &Value) -> Option<String> {
@@ -145,13 +239,14 @@ fn extract_text_delta(value: &Value) -> Option<String> {
 fn extract_full_text(value: &Value) -> Option<String> {
     // From message.content[].text
     if let Some(content) = value.get("message").and_then(|m| m.get("content"))
-        && let Some(arr) = content.as_array() {
-            for item in arr {
-                if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
-                    return Some(text.to_string());
-                }
+        && let Some(arr) = content.as_array()
+    {
+        for item in arr {
+            if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                return Some(text.to_string());
             }
         }
+    }
 
     // From content_block.text
     if let Some(text) = value
@@ -185,7 +280,9 @@ fn extract_usage(value: &Value) -> Option<StreamUsage> {
     let usage = value.get("usage")?;
     let input_tokens = usage.get("input_tokens")?.as_i64()?;
     let output_tokens = usage.get("output_tokens")?.as_i64()?;
-    let cache_read_input_tokens = usage.get("cache_read_input_tokens").and_then(|v| v.as_i64());
+    let cache_read_input_tokens = usage
+        .get("cache_read_input_tokens")
+        .and_then(|v| v.as_i64());
 
     Some(StreamUsage {
         input_tokens,
@@ -202,13 +299,17 @@ mod tests {
     fn assembles_text_deltas() {
         let mut parser = OpencodeStreamParser::default();
         let update1 = parser
-            .process_line(r#"{"type":"content_block_delta","delta":{"type":"text_delta","text":"Hello"}}"#)
+            .process_line(
+                r#"{"type":"content_block_delta","delta":{"type":"text_delta","text":"Hello"}}"#,
+            )
             .unwrap();
         assert_eq!(update1.text_delta, Some("Hello".to_string()));
         assert_eq!(parser.assembled_text(), "Hello");
 
         let update2 = parser
-            .process_line(r#"{"type":"content_block_delta","delta":{"type":"text_delta","text":" world"}}"#)
+            .process_line(
+                r#"{"type":"content_block_delta","delta":{"type":"text_delta","text":" world"}}"#,
+            )
             .unwrap();
         assert_eq!(update2.text_delta, Some(" world".to_string()));
         assert_eq!(parser.assembled_text(), "Hello world");

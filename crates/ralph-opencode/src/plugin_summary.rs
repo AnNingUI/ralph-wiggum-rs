@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 
 use super::plugin_catalog::{plugin_manifest_path, read_plugin_manifest};
 use super::plugin_components::{
+    FilesystemPluginComponentInspector, OpencodePluginComponentInspector,
     OpencodePluginComponentPathSource, OpencodePluginComponents,
-    OpencodePluginComponentInspector, FilesystemPluginComponentInspector,
 };
 
 #[derive(Debug, Clone)]

@@ -40,24 +40,18 @@ impl TuiOutput {
 
 impl ralph_core::plugin::OutputSink for TuiOutput {
     fn emit_stdout(&mut self, line: &str) -> Result<()> {
-        self.inner
-            .push_render_line(RenderLine::status(line))
+        self.inner.push_render_line(RenderLine::status(line))
     }
 
     fn emit_stderr(&mut self, line: &str) -> Result<()> {
-        self.inner
-            .push_render_line(RenderLine::error(line))
+        self.inner.push_render_line(RenderLine::error(line))
     }
 
     fn render_line(&mut self, line: &RenderLine) -> Result<()> {
         self.inner.push_render_line(line.clone())
     }
 
-    fn on_event(
-        &mut self,
-        _event: &AgentEvent,
-        snapshot: &ProgressSnapshot,
-    ) -> Result<()> {
+    fn on_event(&mut self, _event: &AgentEvent, snapshot: &ProgressSnapshot) -> Result<()> {
         // Build a footer string from the snapshot for the status panel
         let footer = build_snapshot_footer(snapshot);
         self.inner.set_runtime(Some(snapshot.clone()), footer)?;

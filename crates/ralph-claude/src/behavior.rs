@@ -12,7 +12,9 @@ pub fn build_claude_args(prompt: &str, model: &str, options: &AgentOptions) -> V
     );
 
     // Determine if we're in print mode
-    let loop_mode = claude.loop_mode.unwrap_or(ralph_core::types::ClaudeLoopMode::Print);
+    let loop_mode = claude
+        .loop_mode
+        .unwrap_or(ralph_core::types::ClaudeLoopMode::Print);
     let is_print_mode = claude.print_mode || loop_mode == ralph_core::types::ClaudeLoopMode::Print;
 
     if is_print_mode {
@@ -102,10 +104,13 @@ pub fn build_claude_args(prompt: &str, model: &str, options: &AgentOptions) -> V
         args.push("--maintenance".to_string());
     }
     if let Some(format) = claude.output_format {
-        // Don't set output format if using --print mode (they conflict)
-        // In print mode, Claude only supports text output
-        if !is_print_mode && format != ClaudeOutputFormat::Text {
+        if format != ClaudeOutputFormat::Text {
             args.push(format!("--output-format={}", format.as_cli_value()));
+            // Claude CLI requires --verbose when combining --print with
+            // a structured output format like stream-json.
+            if is_print_mode {
+                args.push("--verbose".to_string());
+            }
         }
     }
     if claude.include_partial_messages {
@@ -184,5 +189,21 @@ mod tests {
         };
         let args = build_claude_args("test", "model", &options);
         assert!(args.contains(&"--print".to_string()));
+    }
+
+    #[test]
+    fn print_mode_with_stream_json() {
+        let options = AgentOptions {
+            claude: ClaudeOptions {
+                print_mode: true,
+                output_format: Some(ClaudeOutputFormat::StreamJson),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let args = build_claude_args("test", "model", &options);
+        assert!(args.contains(&"--print".to_string()));
+        assert!(args.contains(&"--output-format=stream-json".to_string()));
+        assert!(args.contains(&"--verbose".to_string()));
     }
 }

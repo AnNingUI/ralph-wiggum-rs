@@ -188,9 +188,7 @@ pub async fn run_agent_streaming(
                         }
                         Err(e) => {
                             let _ = stdout_tx
-                                .send(StreamMessage::StderrLine(format!(
-                                    "JSON parse error: {e}"
-                                )))
+                                .send(StreamMessage::StderrLine(format!("JSON parse error: {e}")))
                                 .await;
                         }
                     }
@@ -310,6 +308,7 @@ pub async fn run_agent_streaming(
                 output_buffer: output.output_buffer,
                 tools_used: output.tools_used,
                 latest_ai_response: output.latest_ai_response,
+                session_id: output.session_id,
                 exit_code: -1,
                 interrupted: true,
             });
@@ -332,6 +331,7 @@ pub async fn run_agent_streaming(
                     output_buffer: output.output_buffer,
                     tools_used: output.tools_used,
                     latest_ai_response: output.latest_ai_response,
+                    session_id: output.session_id,
                     exit_code: -1,
                     interrupted: true,
                 });
@@ -344,6 +344,7 @@ pub async fn run_agent_streaming(
                         output_buffer: output.output_buffer,
                         tools_used: output.tools_used,
                         latest_ai_response: output.latest_ai_response,
+                        session_id: output.session_id,
                         exit_code: -1,
                         interrupted: true,
                     });
@@ -385,6 +386,7 @@ pub async fn run_agent_streaming(
                         output_buffer: output.output_buffer,
                         tools_used: output.tools_used,
                         latest_ai_response: output.latest_ai_response,
+                        session_id: output.session_id,
                         exit_code: -1,
                         interrupted: true,
                     });
@@ -426,13 +428,18 @@ pub async fn run_agent_streaming(
         None
     };
 
-    let latest_ai_response =
-        runner.resolve_latest_response(exit_code, &output.output_buffer, handler_latest, captured_latest);
+    let latest_ai_response = runner.resolve_latest_response(
+        exit_code,
+        &output.output_buffer,
+        handler_latest,
+        captured_latest,
+    );
 
     Ok(ExecutionResult {
         output_buffer: output.output_buffer,
         tools_used: output.tools_used,
         latest_ai_response,
+        session_id: output.session_id,
         exit_code,
         interrupted: false,
     })

@@ -126,10 +126,7 @@ impl OpencodePluginSource for OpencodeWorkspace {
                 let name = plugin_dir.file_name()?.to_str()?.to_string();
                 let manifest = read_plugin_manifest(&plugin_dir);
                 Some(OpencodePluginDescriptor {
-                    name: manifest
-                        .as_ref()
-                        .map(|m| m.name.clone())
-                        .unwrap_or(name),
+                    name: manifest.as_ref().map(|m| m.name.clone()).unwrap_or(name),
                     path: plugin_dir,
                     description: manifest.as_ref().and_then(|m| m.description.clone()),
                     version: manifest.as_ref().and_then(|m| m.version.clone()),

@@ -5,8 +5,8 @@ use colored::Colorize;
 use std::env;
 
 use ralph_cli::{
-    AgentRegistry, CliOptionsBuilder, load_codex_config_defaults,
-    resolve_model, run_loop, validate_codex_resume, validate_non_codex_first_iteration,
+    AgentRegistry, CliOptionsBuilder, load_codex_config_defaults, resolve_model, run_loop,
+    validate_codex_resume, validate_non_codex_first_iteration,
 };
 use ralph_core::options::AgentOptions;
 use ralph_core::plugin::{OutputSink, PlainOutput};
@@ -67,9 +67,8 @@ pub async fn run_main(cli: Cli) -> Result<()> {
     };
 
     // Create runner factory
-    let mut create_runner = || -> Result<Box<dyn ralph_core::plugin::Runner>> {
-        plugin.create_runner(&options)
-    };
+    let mut create_runner =
+        || -> Result<Box<dyn ralph_core::plugin::Runner>> { plugin.create_runner(&options) };
 
     // Determine loop mode
     let loop_mode = plugin.loop_mode();
@@ -80,6 +79,7 @@ pub async fn run_main(cli: Cli) -> Result<()> {
         &mut create_runner,
         &options,
         &resolved_model,
+        agent_type,
         agent_type.as_str(),
         sink.as_mut(),
         &project_dir,
@@ -120,7 +120,12 @@ fn create_initial_state(cli: &Cli, _agent_type: AgentType) -> Result<RalphState>
         max_iterations: cli.max_iterations,
         started_at: chrono::Utc::now(),
         one_session: cli.one_session,
-        codex_resume_session: None,
+        codex_resume_session: cli.codex_resume.clone(),
+        claude_session_id: cli
+            .claude_resume
+            .clone()
+            .or_else(|| cli.claude_session_id.clone()),
+        opencode_session_id: cli.opencode_session.clone(),
         rotation: None,
         rotation_index: None,
         promise: cli.promise.clone(),
@@ -132,7 +137,10 @@ fn create_initial_state(cli: &Cli, _agent_type: AgentType) -> Result<RalphState>
     Ok(state)
 }
 
-fn build_options(cli: &Cli, _codex_config: &ralph_cli::CodexConfigDefaults) -> Result<AgentOptions> {
+fn build_options(
+    cli: &Cli,
+    _codex_config: &ralph_cli::CodexConfigDefaults,
+) -> Result<AgentOptions> {
     let builder = CliOptionsBuilder {
         // Common
         allow_all_permissions: false,

@@ -14,10 +14,10 @@
 //! This crate is completely decoupled from any specific business logic. It provides
 //! generic building blocks that can be composed to build responsive streaming UIs.
 
-pub mod stream_reader;
-pub mod json_parser;
 pub mod event_loop;
+pub mod json_parser;
+pub mod stream_reader;
 
-pub use stream_reader::{AsyncStreamReader, StreamChunk};
+pub use event_loop::{EventLoopConfig, NonBlockingEventLoop, StreamState};
 pub use json_parser::{IncrementalJsonParser, JsonParseResult};
-pub use event_loop::{NonBlockingEventLoop, EventLoopConfig, StreamState};
+pub use stream_reader::{AsyncStreamReader, StreamChunk};
